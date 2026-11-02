@@ -94,7 +94,7 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
       hitSomething = true; hits.push(e);
       if (pl.attackDir === 'down' && !pogoTarget) pogoTarget = e;
       const dir = pl.attackDir === 'side' ? pl.facing : Math.sign(e.x - pl.x) || pl.facing;
-      hitEnemy(w, e, base, dir, box, { finisher, knock: wp.knock, mul: wo.mul, crit: wo.crit, launch: wo.launch,
+      hitEnemy(w, e, base, dir, box, { finisher, knock: wp.knock, mul: wo.mul, crit: wo.crit, launch: wo.launch, counter: wo.counter,
         stagger: C.staggerPerHit * (wp.stagger || 1), vertical: pl.attackDir !== 'side' ? (pl.attackDir === 'up' ? 1 : -1) : 0 });
     }
     for (const b of w.breakables) {
@@ -393,7 +393,7 @@ export function updateWorld(w, input, dt) {
       for (const e of w.enemies) {
         if (e.alive && !pr.hitSet.has(e) && overlaps(box, e)) {
           pr.hitSet.add(e); hitEnemy(w, e, pr.dmg, Math.sign(pr.vx) || 1, pr, { fromProc: !!pr.fromProc, heavy: !!pr.heavy, full: pr.full, perfect: pr.perfect,
-            weaponHit: pr.weaponHit, ignite: pr.ignite, hook: pr.hook, launch: pr.launch, spectral: pr.spectral });
+            weaponHit: pr.weaponHit, ignite: pr.ignite, hook: pr.hook, launch: pr.launch, spectral: pr.spectral, choir: pr.choir });
           if (!pr.pierce) { pr.alive = false; break; }
         }
       }
