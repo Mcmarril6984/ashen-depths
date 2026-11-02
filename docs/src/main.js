@@ -50,9 +50,11 @@ boot();
 
 async function boot() {
   try {
-    await loadAssets((f) => { $('#loadbar div').style.width = Math.round(f * 100) + '%'; });
+    window.__booted = true; // the code loaded; from here asset errors are shown by the catch below
+    await loadAssets((f) => { window.__loadingProgress = f; $('#loadbar div').style.width = Math.round(f * 100) + '%'; });
   } catch (err) {
-    $('#loading p').textContent = 'Could not load assets: ' + err.message;
+    $('#loading p').textContent = 'Could not load the game files (' + err.message + '). Check your connection and tap Reload.';
+    const rb = $('#reloadbtn'); rb.classList.remove('hidden'); rb.onclick = () => location.replace(location.pathname + '?fresh=' + Date.now());
     throw err;
   }
   view = new View($('#game'));

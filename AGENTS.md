@@ -49,7 +49,7 @@ The live site is **https://mcmarril6984.github.io/ashen-depths/**, served from t
 is a plain copy of `docs/`. After changes are merged and tested, publish with:
 
 ```sh
-tools/publish.sh   # copies docs/ from the current branch to the gh-pages root and pushes
+tools/publish.sh   # copies docs/ to the gh-pages root, code into src-<sha>/ (keeps last 5), and pushes
 ```
 
 Simpler long-term option: in repo Settings → Pages, deploy from `main` + `/docs` and stop maintaining `gh-pages`.
@@ -206,3 +206,9 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    allies (knight, Hollow King copy, blood shades are particle silhouettes); the spec's weapon-mastery route to
    evolutions; balance passes on a phone against crowds, elites, ranged foes and each boss (spec's last rule);
    clean-up of the retired blessing code paths still in mechanics.js (old stat flags, unused but harmless).
+
+6. **Loading fix (done).** Phones cache each file ~10 min independently, so rapid publishes could mix old and new
+   modules and the game hung on "Loading". publish.sh now ships code in `src-<commit>/` (index.html rewritten to
+   point there; the last 5 versions kept, listed in gh-pages `versions.txt`). index.html has a boot guard: if code
+   fails to load or start it shows a message and a Reload button (`#reloadbtn`); main.js sets `window.__booted`.
+   Never reference `src/` by path from code; always import relatively.

@@ -437,7 +437,28 @@
   <h1>Ashen Depths</h1>
   <p>Loading the hold…</p>
   <div id="loadbar"><div></div></div>
+  <button class="btn hidden" id="reloadbtn">Reload</button>
 </div>
+<script>
+  // Safety net: if the game's code fails to start (a half-updated cache, a bad connection), say so and offer a
+  // reload that fetches fresh files instead of leaving the loading screen hanging.
+  (function () {
+    var shown = false;
+    function offer(msg) {
+      if (shown || window.__booted) return; shown = true;
+      var l = document.getElementById('loading'); if (!l || l.classList.contains('hidden')) return;
+      l.querySelector('p').textContent = msg;
+      var b = document.getElementById('reloadbtn'); b.classList.remove('hidden');
+      b.onclick = function () { var u = location.pathname + '?fresh=' + Date.now(); location.replace(u); };
+    }
+    window.addEventListener('error', function (e) {
+      if (e.target && e.target !== window && (e.target.src || e.target.href)) offer('A game file did not load. Tap Reload to try again.');
+      else if (!window.__booted) offer('The game could not start (' + (e.message || 'unknown error') + '). Tap Reload.');
+    }, true);
+    window.addEventListener('unhandledrejection', function (e) { if (!window.__booted) offer('The game could not start. Tap Reload.'); });
+    setTimeout(function () { if (!window.__booted && !window.__loadingProgress) offer('Still loading… if it is stuck, tap Reload.'); }, 25000);
+  })();
+</script>
 
 <div id="title" class="overlay hidden">
   <div class="tag">A roguelike descent</div>
