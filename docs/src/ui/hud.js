@@ -92,10 +92,10 @@ export class Hud {
       L.combo = c;
     }
     // current weapon + blessing icons (top left, under the flask)
-    const lk = p.stats.weapon + '|' + (this.blessingIcons || '');
+    const lk = p.stats.weapon + '|' + (this.blessingIds || '');
     if (L.loadout !== lk) {
       el.loadout.querySelector('.wp').textContent = '⚔ ' + (this.weaponName?.(p.stats.weapon) || p.stats.weapon);
-      el.loadout.querySelector('.bl').textContent = this.blessingIcons || '';
+      el.loadout.querySelector('.bl').innerHTML = this.blessingHtml?.(this.blessingIds || '') || '';
       L.loadout = lk;
     }
     if (view.fps && L.fps !== view.fps) { el.fps.textContent = view.fps + ' fps'; L.fps = view.fps; }

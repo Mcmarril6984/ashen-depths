@@ -233,3 +233,11 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    are kit gems carrying the blessing's emoji, the buckler shows the kit shield on the hero's left hand.
    Blessings still use emoji icons: the repo has no Synty icon pack. If the owner adds one (e.g. a Synty
    INTERFACE icon set) under docs/assets/ui/icons/, map blessing ids to those images in blessings.js.
+10. **Synty assets everywhere (done).** All Synty assets the owner has are already in the repo (one environment kit
+    + characters + UI art; no icon pack; checked their repos, artifacts and this machine). Every blessing has a
+    `piece` (map `PIECE` in blessings.js), rendered as its icon by `View.pieceIcon` (lighting tuned for icons) and
+    used on shrine/shop cards, the pause list, the HUD row (`hud.blessingIds` → `hud.blessingHtml`, rebuilt only on
+    change), the Hearth and relic sprites (`imageSprite`). Weapons and items show their pieces too
+    (`window.__iconHtml(id)`). Spectral allies (knight, Hollow King copy, blood shades) and the Afterimage decoy
+    are translucent Synty characters (`View.makeGhost`) with run/idle/attack animations.
+    Hand Crossbow still uses an emoji (no crossbow model in the kit).
