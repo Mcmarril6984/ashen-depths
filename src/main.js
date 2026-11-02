@@ -33,6 +33,17 @@ let acc = 0, lastT = 0, deadTimer = 0;
 
 if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('coarse');
 
+// Scale on-screen controls to the device: 1 on ordinary phones (whose layout is tuned by CSS), larger on
+// big phones, foldables and tablets, capped so the button cluster never takes more than ~40% of the width.
+function fitUi() {
+  const W = innerWidth, H = innerHeight;
+  const ui = H <= 460 ? 1 : Math.max(1, Math.min(1.4, H / 560, (W * 0.4) / 320));
+  document.documentElement.style.setProperty('--ui', ui.toFixed(3));
+}
+fitUi();
+addEventListener('resize', fitUi);
+addEventListener('orientationchange', () => setTimeout(fitUi, 300));
+
 boot();
 
 async function boot() {
