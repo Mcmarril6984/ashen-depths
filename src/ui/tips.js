@@ -12,13 +12,17 @@ const LESSONS = {
   combo: { title: 'Combo', text: 'Attack three times in a row — the third blow is a heavy finisher.', keys: [K('J'), K('J'), K('J')], pad: ['x', 'x', 'x'], touch: { btn: 'attack' } },
   upslash: { title: 'Up-slash', text: 'Hold up while attacking to strike above you.', keys: [K('W'), '+', K('J')], pad: ['stick_up', '+', 'x'], touch: { stick: true, btn: 'attack', text: 'Push the stick up and attack.' } },
   pogo: { title: 'Pogo', text: 'In the air, hold down and attack to bounce off spikes and foes.', keys: [K('S'), '+', K('J')], pad: ['stick_down', '+', 'x'], touch: { stick: true, btn: 'attack', text: 'Mid-air: stick down + attack.' } },
+  heavy: { title: 'Heavy attack', text: 'Hold attack to charge, release to strike. Release just as it flashes for a perfect strike.', keys: [K('J'), '+', K('J')], pad: ['x'], touch: { btn: 'attack', text: 'Hold the attack button, release to strike.' } },
   heal: { title: 'Heal', text: 'Stand still and drink your flask.', keys: [K('H')], pad: ['lb'], touch: { btn: 'flask' } },
   shrine: { title: 'Shrines', text: 'Pray at shrines for blessings — each one changes how you fight.', keys: [K('W')], pad: ['y'], touch: { text: 'Tap Pray when it appears.' } },
   exit: { title: 'Descend', text: 'Step onto the lift to go deeper. There is no other way down.', keys: [], pad: [], touch: {} },
 };
 const JIT = {
   jit_shrine: { title: 'A shrine', text: 'Pray to choose a blessing. Blessings stack into builds.' },
-  jit_merchant: { title: 'A trader', text: 'Spend gold on healing, weapons and blessings.' },
+  jit_merchant: { title: 'A trader', text: 'Spend gold on healing and blessings.' },
+  jit_heavy: { title: 'Heavy attack', text: 'Hold attack to charge a heavy strike. Release as it flashes for a perfect strike.' },
+  jit_perfect: { title: 'Perfect dodge', text: 'Dash just as an attack lands: slow-motion, no damage, and your next blow counters.' },
+  jit_relic: { title: 'A relic', text: 'A blessing you dropped. Swap it back in any time on this floor.' },
   jit_weapon: { title: 'A weapon altar', text: 'Swap weapons — your old one stays on the altar.' },
   jit_lowhp: { title: 'Last mask', text: 'Back off and drink your flask (stand still).' },
   jit_lift: { title: 'The way down', text: 'Follow the lanterns to the lift. Stand on it to descend.' },
@@ -115,6 +119,9 @@ export class Tips {
     once('jit_shrine', pk === 'shrine');
     once('jit_merchant', pk === 'shop');
     once('jit_weapon', pk === 'weapon');
+    once('jit_relic', pk === 'relic');
+    once('jit_heavy', world.time > 6);
+    once('jit_perfect', world.time > 12 && world.enemies.some((e) => e.alive && !e.offscreen && e.telegraph > 0.3 && Math.abs(e.x - p.x) < 5));
     once('jit_lowhp', p.hp === 1 && !p.dead && p.flask > 0);
     once('jit_lift', run.depth === 1 && world.time > 25);
     // first sighting of each enemy type: a short "how to beat it" card
