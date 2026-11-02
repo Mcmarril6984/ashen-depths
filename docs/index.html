@@ -361,6 +361,18 @@
     #hearth .card { min-height: 0; width: min(30vw, 170px); padding: 6px 8px; gap: 3px; }
     #hearth .card .icon { font-size: 22px; } #hearth .card .name { font-size: 13px; } #hearth .card .desc { font-size: 11px; }
   }
+  /* ---------- fit any screen ----------
+     Buttons sit in one cluster anchored to the bottom-right safe corner and scale together with the screen
+     (--ui is set from the screen size in main.js), so big phones, foldables and tablets get thumb-sized controls. */
+  #pad { position: absolute; right: var(--sr); bottom: var(--sb); width: 0; height: 0; --sr: 0px; --sb: 0px;
+    transform: scale(var(--ui, 1)); transform-origin: 100% 100%; }
+  #stick { transform: scale(var(--ui, 1)); }
+  #b-interact { white-space: nowrap; }
+  /* Menus scale with screen height too, not only below a fixed breakpoint. */
+  .overlay h1 { font-size: clamp(30px, min(9vw, 10.5vh), 76px); }
+  .overlay h1::before { height: clamp(36px, 12vh, 90px); width: clamp(140px, 36vh, 340px); }
+  .overlay h2 { font-size: clamp(20px, min(5vw, 7vh), 36px); }
+  @media (max-height: 560px) { #title .controls { display: none; } }
 </style>
 </head>
 <body>
@@ -397,12 +409,14 @@
 <div id="touch">
   <div id="stick-zone"></div>
   <div id="stick"><div class="knob"></div></div>
+  <div id="pad">
   <div class="tbtn" id="b-attack" data-btn="attack" aria-label="Attack"><svg viewBox="0 0 24 24"><path d="M4 20 L15 9 M13 5 l6 6 M17 3 l4 4 -2 2 -4 -4z M6 14 l4 4"/></svg></div>
   <div class="tbtn" id="b-jump" data-btn="jump" aria-label="Jump"><svg viewBox="0 0 24 24"><path d="M12 19 V5 M6 11 l6 -6 6 6"/></svg></div>
   <div class="tbtn" id="b-dash" data-btn="dash" aria-label="Dash"><svg viewBox="0 0 24 24"><path d="M3 12 h12 M11 7 l5 5 -5 5 M18 6 v12"/></svg></div>
   <div class="tbtn off" id="b-special" data-btn="special" aria-label="Special"><div class="cd"></div><svg viewBox="0 0 24 24"><path d="M12 3 c3 4 5 6 5 10 a5 5 0 0 1 -10 0 c0 -2 1 -3 2 -4 0 2 1 3 2 3 0 -3 -1 -6 1 -9z"/></svg></div>
   <div class="tbtn" id="b-flask" data-btn="flask" aria-label="Heal"><svg viewBox="0 0 24 24"><path d="M9 3 h6 M10 3 v5 l-5 9 a2 2 0 0 0 2 3 h10 a2 2 0 0 0 2 -3 l-5 -9 V3 M7 14 h10"/></svg></div>
   <div class="tbtn hidden" id="b-interact" data-btn="interact">Pray</div>
+  </div>
 </div>
 
 <div id="loading" class="overlay">

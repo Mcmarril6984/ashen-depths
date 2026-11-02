@@ -33,11 +33,14 @@ export function createInput(root) {
   const stickEl = root.querySelector('#stick');
   const knobEl = root.querySelector('#stick .knob');
   const zone = root.querySelector('#stick-zone');
-  const R = 56; // stick radius in px
+  // stick radius in px; the stick graphic scales with the screen (--ui), so its reach does too
+  const uiScale = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui')) || 1;
+  let R = 56;
 
   zone.addEventListener('pointerdown', (e) => {
     if (stick.id !== null) return;
     touchUsed = true; document.body.classList.add('touch');
+    R = 56 * uiScale();
     stick.id = e.pointerId; stick.ox = e.clientX; stick.oy = e.clientY; stick.x = stick.y = 0;
     stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px';
     stickEl.classList.add('active');
@@ -55,7 +58,7 @@ export function createInput(root) {
       stickEl.style.left = stick.ox + 'px'; stickEl.style.top = stick.oy + 'px';
     }
     stick.x = dx / R; stick.y = -dy / R;
-    knobEl.style.transform = `translate(${dx}px, ${dy}px)`;
+    knobEl.style.transform = `translate(${(dx * 56) / R}px, ${(dy * 56) / R}px)`;
   });
   const endStick = (e) => {
     if (e.pointerId !== stick.id) return;
