@@ -5,7 +5,7 @@ export class Hud {
   constructor() {
     this.el = { hud: $('#hud'), hp: $('#hp'), flask: $('#flask'), gold: $('#gold'), depth: $('#depth'), boss: $('#bossbar'),
       bossFill: $('#bossbar .fill'), banner: $('#banner'), fps: $('#fps'), interact: $('#b-interact'), kprompt: $('#kprompt'),
-      special: $('#b-special'), attack: $('#b-attack'), vignette: $('#hurtvignette'), combo: $('#combo'), loadout: $('#loadout') };
+      special: $('#b-special'), item2: $('#b-item2'), attack: $('#b-attack'), vignette: $('#hurtvignette'), combo: $('#combo'), loadout: $('#loadout') };
     this.last = {};
   }
   show(on) { this.el.hud.classList.toggle('hidden', !on); }
@@ -67,11 +67,17 @@ export class Hud {
     // charge ring on the attack button while holding for a heavy attack
     const ch = p.state === 'charge' ? Math.round(p.charge * 100) : 0;
     if (L.charge !== ch) { L.charge = ch; el.attack.style.setProperty('--charge', ch + '%'); el.attack.classList.toggle('charging', ch > 0); el.attack.classList.toggle('charged', ch >= 100); }
-    const sp = p.stats.special;
-    el.special.classList.toggle('off', !sp);
-    if (sp) {
-      const total = sp === 'firebolt' ? 3 : 4;
-      el.special.querySelector('.cd').style.setProperty('--p', (100 * p.specialCd / total).toFixed(0) + '%');
+    // item buttons: icon, cooldown ring, dim when the slot is empty
+    for (const [i, b] of [[0, el.special], [1, el.item2]]) {
+      if (!b) continue;
+      const id = p.stats.items?.[i] || null, def = id && this.itemDef?.(id);
+      const key = id + ':' + Math.ceil((p.itemCd?.[i] || 0) * 10);
+      if (L['item' + i] === key) continue;
+      L['item' + i] = key;
+      b.classList.toggle('off', !def);
+      b.querySelector('.ic').textContent = def ? def.icon : '';
+      b.querySelector('.cd').style.setProperty('--p', def && def.cd ? (100 * (p.itemCd?.[i] || 0) / def.cd).toFixed(0) + '%' : '0%');
+      b.setAttribute('aria-label', def ? def.name : 'Empty item slot');
     }
     // combo counter: appears from 3 hits, pops on every hit, fades when the chain drops
     const c = world.combo;

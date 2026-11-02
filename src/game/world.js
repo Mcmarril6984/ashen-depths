@@ -8,10 +8,11 @@ import { createEnemy, updateEnemy, damageEnemy, ENEMY_TYPES } from './enemies.js
 import { createPlayer, updatePlayer, hurtPlayer } from './player.js';
 import * as M from './mechanics.js';
 import * as BL from './blessings.js';
+import * as IT from './items.js';
 import { equipWeapon, WEAPONS } from './upgrades.js';
 
-export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapons, level: fixedLevel }) {
-  const level = fixedLevel || generateFloor({ seed: seed * 7919 + depth, depth, allowedWeapons, enemyCountMul: mods.enemyCountMul || 1 });
+export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapons, allowedItems, level: fixedLevel }) {
+  const level = fixedLevel || generateFloor({ seed: seed * 7919 + depth, depth, allowedWeapons, allowedItems, enemyCountMul: mods.enemyCountMul || 1 });
   const rng = makeRng(seed * 31 + depth * 1009);
   const w = {
     seed, depth, level, rng, time: 0, mods,
@@ -42,6 +43,7 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
       case 'pathlight': w.pathlights.push({ x: e.x, y: e.y }); break;
       case 'tip': (w.tips ||= []).push({ ...e, shown: false }); break;
       case 'weapon': w.weaponDrops.push({ x: e.x, y: e.y, id: e.id, t: rng.next() * 6 }); break;
+      case 'item': w.weaponDrops.push({ x: e.x, y: e.y, id: e.id, item: true, t: rng.next() * 6 }); break; // item altar
       case 'saw': w.saws.push({ x: e.x, y: e.y, x0: e.x, y0: e.y, x1: e.x2 ?? e.x, y1: e.y2 ?? e.y, speed: e.speed || 3, t: rng.next(), r: 0.85, angle: 0 }); break;
       case 'decor':
         if (e.name === 'barrel' || e.name === 'crate') w.breakables.push({ ...e, w: 0.9, h: 1, alive: true });
@@ -67,6 +69,7 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
   w.addStagger = (e, a) => addStagger(w, e, a);
   w.selfHarm = (n) => { const pl = w.player; if (pl.dead) return; pl.hp = Math.max(0, pl.hp - n); w.events.push({ t: 'hurt', x: pl.x, y: pl.y + 1 }); w.sfx('hurt'); if (pl.hp <= 0) { pl.dead = true; pl.animRestart = true; lethal(w); } };
   w.flaskHeal = (base) => BL.flaskHeal(w, base);
+  w.useItem = (pl, slot) => IT.useItem(w, pl, slot);
   w.canHeal = () => BL.canHeal(w);
   w.dashFx = (pl, air) => { if (!air) M.onDashStart(w, pl); ev({ t: 'dash', x: pl.x, y: pl.y, dir: pl.facing, air }); };
   w.dashTick = (pl) => M.dashTick(w, pl);
@@ -328,9 +331,10 @@ export function updateWorld(w, input, dt) {
     }
     // Vow of Haste speeds enemies up; slows (Frostbite, Hourglass) slow them; Afterimage's decoy draws nearby grunts
     const decoyed = w.decoy && !e.boss && Math.hypot(e.x - w.decoy.x, e.y - w.decoy.y) < 8;
-    updateEnemy(e, dt * (w.mods.enemySpeed || 1) * (e.slowT > 0 ? e.slowMul || 1 : 1), decoyed ? decoyView(w) : w);
+    const lost = pl.cloakT > 0 && !e.boss; // Ashen Cloak: foes lose track of you
+    updateEnemy(e, dt * (w.mods.enemySpeed || 1) * (e.slowT > 0 ? e.slowMul || 1 : 1), lost ? cloakView(w, e) : decoyed ? decoyView(w) : w);
     e.hurtFlash = Math.max(0, (e.hurtFlash || 0) - dt * 6);
-    if (e.alive && e.contactDmg && !pl.dead && w.respawnTimer <= 0 && overlaps(shrink(e, 0.75), pl)) {
+    if (e.alive && e.contactDmg && !pl.dead && w.respawnTimer <= 0 && !(pl.cloakT > 0) && overlaps(shrink(e, 0.75), pl)) {
       damagePlayer(w, e.contactDmg, Math.sign(pl.x - e.x) || 1, e);
     }
     if (!e.flying && e.alive && tileAt(w.level, Math.floor(e.x), Math.floor(e.y + 0.1)) === T.LAVA) { e.hp = 1; hitEnemy(w, e, 99, 1, e); }
@@ -384,6 +388,7 @@ export function updateWorld(w, input, dt) {
       continue;
     }
     if (tileAt(w.level, Math.floor(pr.x), Math.floor(pr.y)) === T.SOLID) {
+      if (pr.burst) { pr.y += 0.3; IT.itemImpact(w, pr, null); }
       pr.alive = false; w.events.push({ t: 'spark', x: pr.x, y: pr.y, color: pr.kind === 'bone' ? 0xe8dcc0 : 0xff8a3a }); continue;
     }
     const box = { x: pr.x, y: pr.y - pr.r, w: pr.r * 2, h: pr.r * 2 };
@@ -392,7 +397,9 @@ export function updateWorld(w, input, dt) {
     } else {
       for (const e of w.enemies) {
         if (e.alive && !pr.hitSet.has(e) && overlaps(box, e)) {
-          pr.hitSet.add(e); hitEnemy(w, e, pr.dmg, Math.sign(pr.vx) || 1, pr, { fromProc: !!pr.fromProc, heavy: !!pr.heavy, full: pr.full, perfect: pr.perfect,
+          pr.hitSet.add(e);
+          if (pr.item) { if (pr.burst) { IT.itemImpact(w, pr, e); pr.alive = false; break; } hitEnemy(w, e, pr.dmg, Math.sign(pr.vx) || 1, pr, { item: true, fromProc: !!pr.fromProc, ignite: pr.ignite }); if (pr.ignite && e.alive) e.burnT = Math.max(e.burnT || 0, 1.5); IT.itemImpact(w, pr, e); if (!pr.pierce) { pr.alive = false; break; } continue; }
+          hitEnemy(w, e, pr.dmg, Math.sign(pr.vx) || 1, pr, { fromProc: !!pr.fromProc, heavy: !!pr.heavy, full: pr.full, perfect: pr.perfect,
             weaponHit: pr.weaponHit, ignite: pr.ignite, hook: pr.hook, launch: pr.launch, spectral: pr.spectral, choir: pr.choir });
           if (!pr.pierce) { pr.alive = false; break; }
         }
@@ -401,6 +408,7 @@ export function updateWorld(w, input, dt) {
   }
   w.projectiles = w.projectiles.filter((pr) => pr.alive);
   M.tick(w, dt);
+  IT.tickItems(w, dt);
 
   // saw traps ping-pong along their path
   for (const s of w.saws) {
@@ -452,8 +460,14 @@ export function updateWorld(w, input, dt) {
     if (w.merchant && Math.abs(pl.x - w.merchant.x) < 1.8 && Math.abs(pl.y - w.merchant.y) < 1.5) w.prompt = { kind: 'shop', label: 'Trade' };
     for (const d of w.weaponDrops) {
       if (Math.abs(pl.x - d.x) < 1.3 && Math.abs(pl.y - d.y) < 1.6) {
-        const wp = (WEAPONS || []).find((x) => x.id === d.id);
-        w.prompt = { kind: 'weapon', label: 'Take ' + (wp ? wp.name : d.id), target: d };
+        if (d.item) {
+          const it = IT.itemDef(d.id), items = stats.items || [null, null], free = items.indexOf(null);
+          const swap = free < 0 ? IT.itemDef(items[1]) : null;
+          w.prompt = { kind: 'item', label: (swap ? 'Swap ' + swap.name + ' for ' : 'Take ') + (it?.name || d.id), target: d };
+        } else {
+          const wp = (WEAPONS || []).find((x) => x.id === d.id);
+          w.prompt = { kind: 'weapon', label: 'Take ' + (wp ? wp.name : d.id), target: d };
+        }
       }
     }
     for (const r of w.relics || []) { // dropped blessings: swap them back in
@@ -477,6 +491,13 @@ export function updateWorld(w, input, dt) {
     else if (pr.kind === 'chest') openChest(w, pr.target);
     else if (pr.kind === 'shop') w.onShop?.(w.merchant);
     else if (pr.kind === 'relic') w.onRelic?.(pr.target);
+    else if (pr.kind === 'item') { // fill an empty slot, or swap with slot 2; the old item stays on the altar
+      stats.items ||= [null, null];
+      const free = stats.items.indexOf(null), slot = free < 0 ? 1 : free, old = stats.items[slot];
+      stats.items[slot] = pr.target.id; pl.itemCd[slot] = 0;
+      if (old) pr.target.id = old; else w.weaponDrops = w.weaponDrops.filter((d) => d !== pr.target);
+      w.events.push({ t: 'weaponSwap', x: pr.target.x, y: pr.target.y, id: stats.items[slot] }); w.sfx('chest');
+    }
     else if (pr.kind === 'weapon') { // swap: your old weapon stays on the altar
       const old = stats.weapon || 'sword';
       equipWeapon(stats, pr.target.id); pr.target.id = old;
@@ -503,6 +524,7 @@ function damagePlayer(w, dmg, dir, src, attack = false) {
   const pl = w.player;
   if (attack && pl.state === 'dash' && pl.stateTime <= C.perfectDodgeWindow && !pl.dead) { perfectDodge(w, src); return; }
   if (pl.invuln > 0 || pl.dead) return;
+  if (IT.blocks(w, pl, dir, src)) return; // Bronze Buckler: frontal block / parry
   if (M.preventHurt(w, dir, src)) return; // parry / ward
   dmg = BL.incoming(w, dmg, src); // shields, armour, curses; masks round by chance
   if (dmg <= 0) { pl.invuln = Math.max(pl.invuln, 0.4); return; }
@@ -517,6 +539,12 @@ function damagePlayer(w, dmg, dir, src, attack = false) {
 
 // A fatal blow: blessings that save you first, then revives (Phoenix Soul, Death's Bargain).
 function lethal(w) { if (!BL.onLethal(w)) M.tryRevive(w); }
+
+// A cloaked player is invisible: each grunt "sees" a point far behind itself and wanders off.
+function cloakView(w, e) {
+  const ghost = { x: e.x - (e.facing || 1) * 40, y: e.y, w: 0.8, h: 1.7, vx: 0, vy: 0, dead: false, stats: w.player.stats };
+  return Object.assign(Object.create(w), { player: ghost });
+}
 
 // Enemies distracted by Afterimage's decoy see it as the player.
 function decoyView(w) { return w._decoyView?.decoy === w.decoy ? w._decoyView : (w._decoyView = Object.assign(Object.create(w), { player: w.decoy, decoy: w.decoy })); }

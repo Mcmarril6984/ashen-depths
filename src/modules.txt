@@ -3,6 +3,7 @@ audio.js
 game/blessings.js
 game/constants.js
 game/enemies.js
+game/items.js
 game/level/chunks.js
 game/level/generator.js
 game/level/rooms.js

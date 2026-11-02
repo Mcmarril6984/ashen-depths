@@ -387,6 +387,17 @@
     border: 1px solid #7a2a1a; border-radius: 4px; overflow: visible; }
   #danger i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a3a, #ff2a1a); border-radius: 3px; transition: width .2s; }
   #danger span { position: absolute; left: 116px; top: -4px; font-size: 10px; color: #ff9a7a; letter-spacing: .1em; text-transform: uppercase; }
+  /* item buttons (two slots): icon + cooldown ring */
+  #b-item2 { width: 52px; height: 52px; right: calc(110px + var(--sr)); bottom: calc(214px + var(--sb)); }
+  #b-item2.off { opacity: .25; }
+  #b-item2 .cd { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(rgba(0,0,0,.65) var(--p, 0%), transparent 0); }
+  .tbtn.item .ic { font-size: 24px; line-height: 1; position: relative; z-index: 1; filter: drop-shadow(0 1px 2px #000); }
+  body.touch #b-interact, #b-interact { bottom: calc(278px + var(--sb)); }
+  @media (max-height: 460px) {
+    #b-item2 { width: 46px; height: 46px; right: calc(92px + var(--sr)); bottom: calc(166px + var(--sb)); }
+    .tbtn.item .ic { font-size: 20px; }
+    body.touch #b-interact, #b-interact { right: calc(150px + var(--sr)); bottom: calc(222px + var(--sb)); }
+  }
 </style>
 </head>
 <body>
@@ -427,7 +438,8 @@
   <div class="tbtn" id="b-attack" data-btn="attack" aria-label="Attack"><svg viewBox="0 0 24 24"><path d="M4 20 L15 9 M13 5 l6 6 M17 3 l4 4 -2 2 -4 -4z M6 14 l4 4"/></svg></div>
   <div class="tbtn" id="b-jump" data-btn="jump" aria-label="Jump"><svg viewBox="0 0 24 24"><path d="M12 19 V5 M6 11 l6 -6 6 6"/></svg></div>
   <div class="tbtn" id="b-dash" data-btn="dash" aria-label="Dash"><svg viewBox="0 0 24 24"><path d="M3 12 h12 M11 7 l5 5 -5 5 M18 6 v12"/></svg></div>
-  <div class="tbtn off" id="b-special" data-btn="special" aria-label="Special"><div class="cd"></div><svg viewBox="0 0 24 24"><path d="M12 3 c3 4 5 6 5 10 a5 5 0 0 1 -10 0 c0 -2 1 -3 2 -4 0 2 1 3 2 3 0 -3 -1 -6 1 -9z"/></svg></div>
+  <div class="tbtn off item" id="b-special" data-btn="special" aria-label="Item 1"><div class="cd"></div><span class="ic"></span></div>
+  <div class="tbtn off item" id="b-item2" data-btn="item2" aria-label="Item 2"><div class="cd"></div><span class="ic"></span></div>
   <div class="tbtn" id="b-flask" data-btn="flask" aria-label="Heal"><svg viewBox="0 0 24 24"><path d="M9 3 h6 M10 3 v5 l-5 9 a2 2 0 0 0 2 3 h10 a2 2 0 0 0 2 -3 l-5 -9 V3 M7 14 h10"/></svg></div>
   <div class="tbtn hidden" id="b-interact" data-btn="interact">Pray</div>
   </div>
@@ -500,7 +512,7 @@
     <button class="tab" data-ptab="settings">Settings</button><button class="tab" data-ptab="run">Run</button>
   </div>
   <div class="ppanel" data-panel="map"><canvas id="fullmap"></canvas>
-    <div class="legend"><i style="background:#7dffa8"></i>Lift <i style="background:#7ad8ff"></i>Shrine <i style="background:#ffd27a"></i>Trader <i style="background:#ffe066"></i>Chest <i style="background:#e8a0ff"></i>Relic <i style="background:#ff6a5a;border-radius:50%"></i>Foe</div></div>
+    <div class="legend"><i style="background:#7dffa8"></i>Lift <i style="background:#7ad8ff"></i>Shrine <i style="background:#ffd27a"></i>Trader <i style="background:#ffe066"></i>Chest <i style="background:#ffa04a"></i>Item altar <i style="background:#e8a0ff"></i>Relic <i style="background:#ff6a5a;border-radius:50%"></i>Foe</div></div>
   <div class="ppanel hidden" data-panel="build"><div id="buildlist" class="buildlist"></div></div>
   <div class="ppanel hidden" data-panel="settings"><div id="settingslist" class="settings"></div></div>
   <div class="ppanel hidden" data-panel="run"><div class="stats" id="pausestats"></div>
@@ -536,7 +548,7 @@
   // Start the game. On the live site GitHub sometimes answers a burst of requests with a stray 503, which would
   // break module loading for good, so first fetch every code file with retries (this fills the browser cache),
   // then import main.js. CODE is rewritten to the versioned folder by tools/publish.sh.
-  const CODE = 'src-4d5ac45/';
+  const CODE = 'src-811517d/';
   const retry = async (fn, delays = [400, 1000, 2000, 3500]) => {
     for (let i = 0; ; i++) { try { return await fn(i); } catch (e) { if (i >= delays.length) throw e; await new Promise((ok) => setTimeout(ok, delays[i])); } }
   };
