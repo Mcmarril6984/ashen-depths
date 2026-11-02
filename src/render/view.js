@@ -40,7 +40,7 @@ const ENEMY_LOOK = {
 };
 // Animation used for each logical enemy anim (name, speed)
 const PROJ_COLOR = { fireball: 0xff5a2a, wave: 0x9ad8ff, firebolt: 0xffb040, orb: 0xb46aff, bolt: 0x6ae8ff, windblade: 0xe0f4ff,
-  arrow: 0xd8f0ff, crescent: 0xb48aff, hook: 0xc8c0b0, flamewave: 0xff7a2a };
+  arrow: 0xd8f0ff, crescent: 0xb48aff, hook: 0xc8c0b0, flamewave: 0xff7a2a, spirit: 0x9ae8ff, ember: 0xff8a3a, darkslash: 0x6a3aaa };
 const ENEMY_ANIM = {
   idle: ['idle_menace', 1], walk: ['walk', 1.1], run: ['run', 1], windup: ['heavy1', 0.45], attack: ['attack1', 1.9],
   attack2: ['attack2', 1.9], throw: ['attack3', 2], hurt: ['hurt', 1.6], death: ['death', 1.1], block: ['block', 1],
@@ -673,6 +673,14 @@ export class View {
     g.add(this.exitLight);
   }
 
+  // A camera-facing sprite showing an emoji (blessing icons on relics).
+  emojiSprite(ch, size) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d'); g.font = '96px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, 64, 72);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
+    s.scale.setScalar(size); return s;
+  }
+
   sprite(color, size, opacity) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color, transparent: true, opacity,
       blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
@@ -793,10 +801,10 @@ export class View {
       if (off) ch.offhand = attachPiece(ch, 'Hand_L', off, { ...GRIP, rot: [0, 0, Math.PI / 2] });
       pv.weaponId = p.stats.weapon;
     }
-    if (p.stats.ward || p.tonicWard) {
+    if (p.stats.ward || p.tonicWard || p.shield !== undefined) {
       pv.ward ||= (() => { const s = this.sprite(0x8ac8ff, 2.6, 0); this.levelGroup.add(s); return s; })();
       pv.ward.position.set(p.x, p.y + 0.95, 0.4);
-      pv.ward.material.opacity = p.wardReady || p.tonicWard ? 0.22 + Math.sin(world.time * 3) * 0.06 : 0;
+      pv.ward.material.opacity = p.wardReady || p.tonicWard || p.shield ? 0.22 + Math.sin(world.time * 3) * 0.06 : 0;
     }
 
     // enemies
@@ -846,6 +854,7 @@ export class View {
       const tgk = e.boss ? 0.35 : 0.9;
       const lv = v.look?.lava ? 0.3 + Math.sin(world.time * 3) * 0.06 : 0;
       if (!(e.boss && this.finaleT > 0)) v.mat.emissive.setRGB(f * 1.2 + tg * tgk + xg * 0.5 + lv, f * 1.2 + tg * tgk * 0.17 + xg * 0.18 + lv * 0.3, f * 1.2 + tg * 0.05);
+      if (e.frozenT > 0 && e.alive) v.mat.emissive.setRGB(0.2 + f, 0.5 + f, 0.95);
     }
     for (const [e, v] of this.enemyViews) {
       if (!world.enemies.includes(e)) {
@@ -1126,9 +1135,13 @@ export class View {
     const P = this.particles;
     if (e.burnT > 0 && Math.random() < 0.5) P.emit(e.x + (Math.random() - 0.5) * e.w, e.y + Math.random() * e.h, 0.4, 1, 0xff7a2a, { speed: 0.6, up: 2.2, life: 0.45, size: 0.3 });
     if (e.bleed > 0 && Math.random() < 0.12 * e.bleed) P.emit(e.x, e.y + e.h * 0.6, 0.4, 1, 0xa01010, { speed: 0.8, life: 0.6, size: 0.22, gravity: 10 });
-    if (e.stunT > 0 && Math.random() < 0.4) { const a = world.time * 9; P.emit(e.x + Math.cos(a) * 0.6, e.y + e.h + 0.2, 0.5, 1, 0xfff07a, { speed: 0.1, life: 0.3, size: 0.24 }); }
+    if (e.poisonT > 0 && Math.random() < 0.35) P.emit(e.x + (Math.random() - 0.5) * e.w, e.y + e.h * Math.random(), 0.3, 1, 0x7ae84a, { speed: 0.4, up: 1, life: 0.6, size: 0.26 });
+    if (e.chill > 0 && Math.random() < 0.06 * e.chill) P.emit(e.x + (Math.random() - 0.5) * e.w, e.y + e.h * Math.random(), 0.3, 1, 0xbfe8ff, { speed: 0.3, life: 0.5, size: 0.2 });
+    if (e.chainT > 0 && Math.random() < 0.25) P.emit(e.x, e.y + e.h * 0.6, 0.3, 1, 0xff9a3a, { speed: 1, life: 0.3, size: 0.22 });
+    if (e.frozenT > 0 && v.mat) v.mat.emissive.setRGB(0.25, 0.55, 0.9);
+    if (e.stunT > 0 && !(e.frozenT > 0) && Math.random() < 0.4) { const a = world.time * 9; P.emit(e.x + Math.cos(a) * 0.6, e.y + e.h + 0.2, 0.5, 1, 0xfff07a, { speed: 0.1, life: 0.3, size: 0.24 }); }
     if (!v.badge) { v.badge = this.sprite(0xc890ff, 0.9, 0); this.levelGroup.add(v.badge); }
-    const badge = e.marked ? 0xc890ff : e.executable ? 0xff2a2a : null;
+    const badge = e.marked || e.ghostMark ? 0xc890ff : e.executable ? 0xff2a2a : e.prey ? 0xffb030 : e.penanceT > 0 ? 0xfff0c0 : null;
     v.badge.visible = !!badge && v.root.visible;
     if (badge) { v.badge.material.color.setHex(badge); v.badge.position.set(e.x, e.y + e.h + 0.45, 0.6); v.badge.material.opacity = 0.7 + Math.sin(world.time * 10) * 0.25; }
     if (e.executable && v.mat) v.mat.emissive.r = Math.max(v.mat.emissive.r, 0.35 + Math.sin(world.time * 10) * 0.2);
@@ -1137,6 +1150,19 @@ export class View {
   // Merchant, weapon altars, hearts, souls, dash trails, special projectiles
   updateItems(world, dt) {
     const P = this.particles;
+    for (const c of world.clouds || []) if (Math.random() < 0.7) P.emit(c.x + (Math.random() - 0.5) * 3, c.y + Math.random() * 1.5, 0.2, 1, 0x6ad83a, { speed: 0.3, up: 0.3, life: 0.9, size: 0.6 });
+    for (const a of world.allies || []) { // spectral fighters: a shimmering silhouette of light
+      for (let i = 0; i < 3; i++) P.emit(a.x + (Math.random() - 0.5) * 0.7, a.y + Math.random() * 1.9, 0.05, 1, a.kind === 'hollow' ? 0xc8a0ff : 0x9ae8ff, { speed: 0.3, up: 0.6, life: 0.35, size: 0.32 });
+    }
+    if (world.decoy) for (let i = 0; i < 2; i++) P.emit(world.decoy.x + (Math.random() - 0.5) * 0.6, world.decoy.y + Math.random() * 1.7, 0.05, 1, 0xc8c8ff, { speed: 0.2, life: 0.3, size: 0.32 });
+    this.relicViews ||= new Map();
+    for (const r of world.relics || []) {
+      let v = this.relicViews.get(r);
+      if (!v) { v = this.emojiSprite(r.icon || this.blessingIcon?.(r.id) || '✦', 0.9); this.levelGroup.add(v); this.relicViews.set(r, v); }
+      v.position.set(r.x, r.y + 1 + Math.sin(world.time * 2.5 + r.x) * 0.12, 0.5);
+      if (Math.random() < 0.3) P.emit(r.x, r.y + 0.9, 0.4, 1, 0xffd27a, { speed: 0.5, up: 1, life: 0.6, size: 0.22 });
+    }
+    for (const [r, v] of this.relicViews) if (!(world.relics || []).includes(r)) { this.levelGroup.remove(v); this.relicViews.delete(r); }
     if (world.merchant && !this.merchantView) {
       const ch = makeCharacter('dwarf_miner');
       const mat = rimify(this.charMat.clone(), [1, 0.85, 0.6]); mat.map = assets.chars.dwarf_miner.map;
@@ -1271,6 +1297,22 @@ export class View {
           P.emit(ev.x, ev.y, 0.6, ev.full ? 36 : 20, ev.perfect ? 0xfff4c0 : 0xffa040, { speed: 8, life: 0.4, size: 0.32, dir: ev.facing });
           if (ev.full) this.zoomPunch = Math.max(this.zoomPunch || 0, ev.perfect ? 1 : 0.5);
           vibrate(ev.perfect ? 40 : 20); break;
+        case 'echo': this.fx.impact(ev.x, ev.y, 1.6, ev.kind === 'crimson' ? 0xff4a4a : ev.kind === 'shade' ? 0x9a7aff : 0xd0e8ff); P.emit(ev.x, ev.y, 0.4, 10, ev.kind === 'crimson' ? 0xff3a3a : 0xc8d8ff, { speed: 4, life: 0.3, size: 0.25 }); break;
+        case 'judgment': this.fx.impact(ev.x, ev.y, 2.8, 0xfff0b0); P.emit(ev.x, ev.y + 2, 0.2, 20, 0xfff0c0, { speed: 2, life: 0.4, size: 0.3, gravity: -10 }); break;
+        case 'shatter': this.fx.impact(ev.e.x, ev.e.y + ev.e.h / 2, 3, 0xbfe8ff); P.emit(ev.e.x, ev.e.y + ev.e.h / 2, 0.5, 34, 0xd8f4ff, { speed: 8, life: 0.6, size: 0.3, gravity: 12 }); break;
+        case 'frozen': P.emit(ev.e.x, ev.e.y + ev.e.h / 2, 0.6, 24, 0xbfe8ff, { speed: 3, life: 0.6, size: 0.3 }); break;
+        case 'chilled': case 'slowed': P.emit(ev.e.x, ev.e.y + ev.e.h, 0.5, 12, ev.t === 'chilled' ? 0xbfe8ff : 0xe0d0ff, { speed: 2, life: 0.5, size: 0.25 }); break;
+        case 'cloud': P.emit(ev.x, ev.y, 0.8, 30, 0x7ae84a, { speed: 1.5, up: 0.5, life: 1.2, size: 0.5 }); break;
+        case 'emberchain': this.fx.lightning(ev.pts); for (const pt of ev.pts) P.emit(pt.x, pt.y, 0.4, 10, 0xff8a3a, { speed: 3, life: 0.4, size: 0.25 }); break;
+        case 'bell': this.fx.impact(ev.x, ev.y + 1, 5, 0xd8e8ff); this.fx.ring(ev.x, ev.y + 0.5, 3, 0xc8d8ff); this.zoomPunch = 1; vibrate(40); break;
+        case 'eclipse': this.fx.ring(ev.x, ev.y + 1, 3, 0x6a3aaa); P.emit(ev.x, ev.y + 1, 0.5, 40, 0x4a1a8a, { speed: 5, life: 0.8, size: 0.4 }); break;
+        case 'stormcharge': P.emit(ev.x, ev.y, 0.5, 6 * ev.n, 0xc8f0ff, { speed: 3, life: 0.4, size: 0.24 }); break;
+        case 'decoy': P.emit(ev.x, ev.y + 0.9, 0.4, 24, 0xc8c8ff, { speed: 1.5, life: 0.6, size: 0.35 }); break;
+        case 'summon': this.fx.ring(ev.x, ev.y + 1, 2, 0x9ae8ff); P.emit(ev.x, ev.y + 1, 0.5, 30, 0x9ae8ff, { speed: 3, up: 2, life: 0.8, size: 0.35 }); break;
+        case 'allyhit': this.fx.impact(ev.x, ev.y, 1.6, 0x9ae8ff); break;
+        case 'fragment': P.emit(ev.x, ev.y, 0.3, 14, 0x6aff9a, { speed: 2, up: 2, life: 0.8, size: 0.3 }); break;
+        case 'debt': P.emit(ev.x, ev.y + 1, 0.4, 20, 0x8a0a0a, { speed: 3, life: 0.6, size: 0.3, gravity: 8 }); break;
+        case 'relicdrop': this.fx.ring(ev.x, ev.y + 0.6, 1.4, 0xffd27a); break;
         case 'counter': this.fx.impact(ev.x, ev.y, 2.8, 0xfff4c0); P.emit(ev.x, ev.y, 0.4, 20, 0xfff0a0, { speed: 6, life: 0.35, size: 0.28 }); break;
         case 'soulspend': this.fx.ring(ev.x, ev.y, 2, 0xb48aff); P.emit(ev.x, ev.y, 0.5, 30, 0xc8a0ff, { speed: 5, up: 2, life: 0.6, size: 0.3 }); break;
         case 'hooked': for (let i = 0; i <= 10; i++) P.emit(ev.px + (ev.x - ev.px) * i / 10, ev.py + (ev.y - ev.py) * i / 10, 0.05, 1, 0xd0c8b8, { speed: 0.3, life: 0.25, size: 0.18 }); this.fx.impact(ev.x, ev.y, 1.6, 0xe8e0d0); break;

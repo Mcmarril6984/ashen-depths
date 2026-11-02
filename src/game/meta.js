@@ -1,10 +1,14 @@
 import { UPGRADES, WEAPONS } from './upgrades.js';
 import { STARTER_WEAPON } from './weapons.js';
 
-export const BASE_BLESSINGS = ['serrated_edge','kindled_blade','ember_trail','pogo_storm','soul_harvest','executioner','deflect','bloodlust','feather_step','firebolt'];
+// Starter blessings (free): four of each regular kind. Everything else is bought in the Hearth.
+export const BASE_BLESSINGS = ['emberchain','crimson_echo','ashen_brand','frostbite','wind_dancer','ghostwalk','featherless_wings','predators_rhythm','guardian_flame','soul_shelter','second_skin','unbroken_oath'];
 export const BASE_WEAPONS = [STARTER_WEAPON];
 // Unlocks retired by the 3.1 rework: owners get the Ember back once, the next time the save loads.
-const RETIRED = { dagger: 25, axe: 35, mace: 45, greatsword: 60, hammer: 70, loadout: 30 };
+const RETIRED = { dagger: 25, axe: 35, mace: 45, greatsword: 60, hammer: 70, loadout: 30,
+  cinder_blood: 40, storm_brand: 55, slipstream: 30, aerial_fuse: 50, blood_echo: 35, thunder_clap: 60, storm_crown: 35, riposte: 60,
+  phantom_dash: 35, boomerang_blade: 40, warding_sigil: 40, phoenix_ember: 80, last_stand: 40, wind_blades: 45, juggler: 35,
+  shadow_step: 60, flask_nova: 25, shockwave: 30 };
 const catalog = (cat, source, rows) => rows.map(([id,cost,requires]) => {
   const {name,desc,icon}=source.find(item=>item.id===id);
   return {id,cat,name,desc,icon,cost,target:id,...(requires?{requires}:{} )};
@@ -13,7 +17,12 @@ export const BOSS_IDS=['dwarf_king','forge_golem','bone_lord','demon'];
 export const startDepth=biome=>({halls:1,forge:6,crypt:11,hell:16}[biome]||1);
 export const UNLOCKS = [
   ...[['forge','dwarf_king','The Forge'],['crypt','forge_golem','The Sunken Crypt'],['hell','bone_lord','The Hell Gate']].map(([biome,boss,name])=>({id:'start_'+biome,cat:'start',name,desc:'Begin your descent at '+name,icon:'🔥',cost:0,condition:{boss}})),
-  ...catalog('blessing',UPGRADES,[['cinder_blood',40],['storm_brand',55],['slipstream',30],['aerial_fuse',50],['blood_echo',35],['thunder_clap',60],['storm_crown',35],['riposte',60],['phantom_dash',35],['boomerang_blade',40],['warding_sigil',40],['phoenix_ember',80],['last_stand',40],['wind_blades',45],['juggler',35],['shadow_step',60,['phantom_dash']],['flask_nova',25],['shockwave',30]]),
+  ...catalog('blessing',UPGRADES,[
+    ['rupture',35],['final_judgment',40],['soul_rend',40],['plaguebearer',40],['executioners_mercy',35],['relentless_edge',35],['shatterpoint',45,['frostbite']],['last_rites',35],
+    ['afterimage',35],['comet_dive',35],['reversal',40],['endless_ascent',35],['shadow_pursuit',35],['phantom_step',45],['falling_star',35],['skybreaker',30],
+    ['ashen_carapace',35],['undying_will',35],['penance',35],['stonebound',35],['iron_resolve',35],['gravekeepers_gift',40],['vengeful_guard',35],['deaths_refusal',60],
+    ['ravenous_blade',50],['borrowed_time',55],['martyrs_flame',50],['fragile_divinity',60],['hunger_of_the_void',50],['the_unforgiven',50],['blood_covenant',55],['glass_saint',55],['the_last_flame',50],['burden_of_kings',50],['deaths_bargain',60],
+    ['eclipse',100],['seventh_bell',90],['phoenix_soul',110],['thousandfold_blade',100],['sovereign_of_ash',100],['endless_hunt',90],['crown_of_the_fallen',110],['hourglass_of_ruin',100],['heart_of_the_abyss',100],['wings_of_the_forsaken',110],['perfect_storm',100],['hollow_king',110]]),
   ...catalog('weapon',WEAPONS,[['bloodletter',30],['ashen_fists',35],['mourning_reaper',50],['gravehook',55],['oathbreaker',60],['hollowpoint',75],['wraithstring',80]]),
   ...[
     ['shrine_reroll','feature','Shrine Candle',40,"Reroll a shrine's blessings once",'🕯️'],

@@ -379,6 +379,14 @@
     -webkit-mask: radial-gradient(closest-side, transparent 84%, #000 86%); mask: radial-gradient(closest-side, transparent 84%, #000 86%); }
   #b-attack.charging::before { opacity: 1; }
   #b-attack.charged::before { background: #fff0c0; filter: drop-shadow(0 0 8px #ffc070); }
+  /* 3.1 blessings: cursed cards, shield mask, Last Flame danger meter */
+  .card.cursed { border-image-source: url(assets/ui/frame_box_bone.png); filter: drop-shadow(0 0 8px rgba(255,60,40,.45)); }
+  .card.cursed .rar { color: #ff6a5a; }
+  .mask.shield { background: #9ae8ff; filter: drop-shadow(0 0 6px #6ad8ff); }
+  #danger { position: absolute; left: calc(14px + var(--sl)); top: calc(96px + var(--st)); width: 110px; height: 8px; background: #2a1010;
+    border: 1px solid #7a2a1a; border-radius: 4px; overflow: visible; }
+  #danger i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a3a, #ff2a1a); border-radius: 3px; transition: width .2s; }
+  #danger span { position: absolute; left: 116px; top: -4px; font-size: 10px; color: #ff9a7a; letter-spacing: .1em; text-transform: uppercase; }
 </style>
 </head>
 <body>

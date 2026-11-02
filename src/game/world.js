@@ -7,6 +7,7 @@ import { generateFloor } from './level/generator.js';
 import { createEnemy, updateEnemy, damageEnemy, ENEMY_TYPES } from './enemies.js';
 import { createPlayer, updatePlayer, hurtPlayer } from './player.js';
 import * as M from './mechanics.js';
+import * as BL from './blessings.js';
 import { equipWeapon, WEAPONS } from './upgrades.js';
 
 export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapons, level: fixedLevel }) {
@@ -28,7 +29,11 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
 
   for (const e of level.entities) {
     switch (e.kind) {
-      case 'enemy': w.enemies.push(createEnemy(e.type, e.x, e.y, rng)); break;
+      case 'enemy': {
+        const en = createEnemy(e.type, e.x, e.y, rng);
+        if (e.elite && !en.boss) { en.elite = true; en.hp = en.maxHp = Math.round(en.maxHp * 1.8); } // elites: tougher, count for elite blessings
+        w.enemies.push(en); break;
+      }
       case 'shrine': w.shrines.push({ x: e.x, y: e.y, used: false }); break;
       case 'chest': w.chests.push({ x: e.x, y: e.y, w: 1.6, h: 1, open: false, openT: 0 }); break;
       case 'torch': w.torches.push({ x: e.x, y: e.y }); break;
@@ -59,6 +64,10 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
     if (dx || dy) { w.shakeX = dx * a; w.shakeY = dy * a; }
   };
   w._hit = (e, dmg, dir, src, opts) => hitEnemy(w, e, dmg, dir, src, opts);
+  w.addStagger = (e, a) => addStagger(w, e, a);
+  w.selfHarm = (n) => { const pl = w.player; if (pl.dead) return; pl.hp = Math.max(0, pl.hp - n); w.events.push({ t: 'hurt', x: pl.x, y: pl.y + 1 }); w.sfx('hurt'); if (pl.hp <= 0) { pl.dead = true; pl.animRestart = true; lethal(w); } };
+  w.flaskHeal = (base) => BL.flaskHeal(w, base);
+  w.canHeal = () => BL.canHeal(w);
   w.dashFx = (pl, air) => { if (!air) M.onDashStart(w, pl); ev({ t: 'dash', x: pl.x, y: pl.y, dir: pl.facing, air }); };
   w.dashTick = (pl) => M.dashTick(w, pl);
   w.onFlask = (pl) => M.onFlask(w, pl);
@@ -78,11 +87,11 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
     let hitSomething = false;
     ev({ t: 'swing', x: pl.x, y: pl.y, dir: pl.attackDir, facing: pl.facing, combo: opts.extra ? 2 : pl.combo, finisher, weapon: wp.id });
     const base = pl.stats.dmg * wp.dmgMul * (finisher ? 1.5 : opts.extra ? 0.6 : 1);
-    w._echoThisSwing = false; let pogoTarget = null;
+    w._echoThisSwing = false; let pogoTarget = null; const hits = [];
     if (wo.skip) { M.onSwing(w, pl, { finisher, extra: opts.extra }); return; } // ranged weapons fire instead
     for (const e of w.enemies) {
       if (!e.alive || !overlaps(box, e)) continue;
-      hitSomething = true;
+      hitSomething = true; hits.push(e);
       if (pl.attackDir === 'down' && !pogoTarget) pogoTarget = e;
       const dir = pl.attackDir === 'side' ? pl.facing : Math.sign(e.x - pl.x) || pl.facing;
       hitEnemy(w, e, base, dir, box, { finisher, knock: wp.knock, mul: wo.mul, crit: wo.crit, launch: wo.launch,
@@ -115,7 +124,7 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
     } else if (hitSomething && pl.onGround && pl.attackDir === 'side' && !opts.extra) {
       pl.vx -= pl.facing * 2.5; // recoil
     }
-    M.onSwing(w, pl, { finisher, extra: opts.extra });
+    M.onSwing(w, pl, { finisher, extra: opts.extra, hits });
   };
 
   // Heavy (charged) attack: bigger arc, more damage and stagger. Full charge and perfect timing hit harder.
@@ -172,7 +181,7 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
   w.playerHazard = (pl, kind) => {
     if (w.respawnTimer > 0) return;
     const landed = hurtPlayer(pl, 1, -pl.facing, w, { ignoreInvuln: true });
-    if (pl.dead) M.tryRevive(w);
+    if (pl.dead) lethal(w);
     if (landed) { w.shake(0.4); w.hitStop = 0.04; ev({ t: 'hurt', x: pl.x, y: pl.y }); w.sfx('hurt'); }
     ev({ t: kind === T.LAVA ? 'burn' : 'spark', x: pl.x, y: pl.y + 0.3, color: 0xff5533 });
     if (!pl.dead) w.respawnTimer = 0.45;
@@ -207,9 +216,9 @@ function hitEnemy(w, e, baseDmg, dir, src, o = {}) {
     return r;
   }
   e.hurtFlash = 1;
-  if (!r.killed) addStagger(w, e, stagger || (heavy ? C.staggerHeavy * (full ? 1.5 : 1) : fromProc ? 0.5 : C.staggerPerHit));
+  if (!r.killed) addStagger(w, e, (stagger || (heavy ? C.staggerHeavy * (full ? 1.5 : 1) : fromProc ? 0.5 : C.staggerPerHit)) * (fromProc ? 1 : BL.staggerMul(w, o)) * BL.preyStagger(w, e));
   if (!fromProc) { w.combo++; w.comboT = 2.2; }
-  M.onHit(w, e, r, { ...o, finisher, vertical, fromPlayer: !fromProc, src });
+  M.onHit(w, e, r, { ...o, dmg, finisher, vertical, fromPlayer: !fromProc, src });
   const big = heavy || finisher || crit || r.killed;
   w.events.push({ t: 'hit', x: hx, y: hy, crit, dmg, e, dir, vertical, killed: r.killed, finisher, combo: w.combo });
   w.hitStop = Math.max(w.hitStop, r.killed ? 0.07 : big ? 0.055 : 0.035);
@@ -256,6 +265,7 @@ function onKill(w, e) {
     for (const o of w.enemies) if (o !== e && o.alive) { o.hp = 0; damageEnemy(o, 99, 1, w); }
     w.events.push({ t: 'bossDead', e });
     (w.bossesBeaten ||= []).push(e.type);
+    BL.onBossBeaten(w);
   }
 }
 
@@ -296,7 +306,7 @@ export function updateWorld(w, input, dt) {
     w.liftDrop = (1.8 - w.descending) * 2.4;
     if (w.descending <= 0 && !w.descended) { w.descended = true; if (w.isLastFloor) w.onVictory?.(); else w.onExit?.(); }
   } else {
-    pl.atkMul = (M.weaponOf(stats).speedMul || 1) * (pl.atkFlow || 1);
+    pl.atkMul = (M.weaponOf(stats).speedMul || 1) * (pl.atkFlow || 1) * (pl.atkBless || 1);
     updatePlayer(pl, input, dt, w);
   }
 
@@ -316,7 +326,9 @@ export function updateWorld(w, input, dt) {
       e.hurtFlash = Math.max(0, (e.hurtFlash || 0) - dt * 6);
       continue;
     }
-    updateEnemy(e, dt * (w.mods.enemySpeed || 1), w); // Vow of Haste speeds enemies up
+    // Vow of Haste speeds enemies up; slows (Frostbite, Hourglass) slow them; Afterimage's decoy draws nearby grunts
+    const decoyed = w.decoy && !e.boss && Math.hypot(e.x - w.decoy.x, e.y - w.decoy.y) < 8;
+    updateEnemy(e, dt * (w.mods.enemySpeed || 1) * (e.slowT > 0 ? e.slowMul || 1 : 1), decoyed ? decoyView(w) : w);
     e.hurtFlash = Math.max(0, (e.hurtFlash || 0) - dt * 6);
     if (e.alive && e.contactDmg && !pl.dead && w.respawnTimer <= 0 && overlaps(shrink(e, 0.75), pl)) {
       damagePlayer(w, e.contactDmg, Math.sign(pl.x - e.x) || 1, e);
@@ -415,7 +427,7 @@ export function updateWorld(w, input, dt) {
     }
     if (d < 0.7 && c.age > 0.3) {
       c.taken = true;
-      if (c.heart) { pl.hp = Math.min(pl.stats.maxHp, pl.hp + 1); w.healFx(pl); }
+      if (c.heart) { if (!BL.canHeal(w)) { c.taken = false; continue; } pl.hp = Math.min(pl.stats.maxHp, pl.hp + 1); w.healFx(pl); }
       else { pl.gold += c.value; w.events.push({ t: 'coin', x: c.x, y: c.y }); w.sfx('coin'); }
     }
   }
@@ -444,6 +456,13 @@ export function updateWorld(w, input, dt) {
         w.prompt = { kind: 'weapon', label: 'Take ' + (wp ? wp.name : d.id), target: d };
       }
     }
+    for (const r of w.relics || []) { // dropped blessings: swap them back in
+      if (Math.abs(pl.x - r.x) < 1.2 && Math.abs(pl.y - r.y) < 1.6) {
+        const d = BL.blessingDef(r.id), slot = BL.slotOf(r.id), owned = Object.keys(stats.bless || {});
+        const swap = slot !== 'regular' ? owned.some((o) => BL.slotOf(o) === slot) : owned.filter((o) => BL.slotOf(o) === 'regular').length >= BL.regularSlots(stats);
+        w.prompt = { kind: 'relic', label: (swap ? 'Swap: ' : 'Take: ') + (d?.name || r.id), target: r };
+      }
+    }
     // descend only by standing on the lift (no remote prompt, no skipping)
     const L = w.lift, onLift = Math.abs(pl.x - L.x) < L.w / 2 && Math.abs(pl.y - L.y) < 0.7;
     if (onLift && !w.exit.open) w.prompt = { kind: 'locked', label: 'Sealed — defeat the guardian' };
@@ -457,6 +476,7 @@ export function updateWorld(w, input, dt) {
     if (pr.kind === 'shrine') { pr.target.used = true; w.events.push({ t: 'shrine', s: pr.target }); w.onShrine?.(pr.target); }
     else if (pr.kind === 'chest') openChest(w, pr.target);
     else if (pr.kind === 'shop') w.onShop?.(w.merchant);
+    else if (pr.kind === 'relic') w.onRelic?.(pr.target);
     else if (pr.kind === 'weapon') { // swap: your old weapon stays on the altar
       const old = stats.weapon || 'sword';
       equipWeapon(stats, pr.target.id); pr.target.id = old;
@@ -482,14 +502,24 @@ function explode(w, pr) {
 function damagePlayer(w, dmg, dir, src, attack = false) {
   const pl = w.player;
   if (attack && pl.state === 'dash' && pl.stateTime <= C.perfectDodgeWindow && !pl.dead) { perfectDodge(w, src); return; }
+  if (pl.invuln > 0 || pl.dead) return;
   if (M.preventHurt(w, dir, src)) return; // parry / ward
-  if (!hurtPlayer(pl, dmg, dir, w)) return;
-  if (pl.dead) M.tryRevive(w);
+  dmg = BL.incoming(w, dmg, src); // shields, armour, curses; masks round by chance
+  if (dmg <= 0) { pl.invuln = Math.max(pl.invuln, 0.4); return; }
+  if (!hurtPlayer(pl, dmg, dir, w, { steadfast: BL.steadfast(w) })) return;
+  BL.onHurt(w, dmg, src);
+  if (pl.dead) lethal(w);
   w.hitStop = 0.05; w.shake(0.45, dir, 0.4); w.combo = 0;
   w.events.push({ t: 'hurt', x: pl.x, y: pl.y + 1 });
   w.sfx('hurt');
   if (src && src.alive && pl.stats.thorns) hitEnemy(w, src, pl.stats.thorns, -dir, pl);
 }
+
+// A fatal blow: blessings that save you first, then revives (Phoenix Soul, Death's Bargain).
+function lethal(w) { if (!BL.onLethal(w)) M.tryRevive(w); }
+
+// Enemies distracted by Afterimage's decoy see it as the player.
+function decoyView(w) { return w._decoyView?.decoy === w.decoy ? w._decoyView : (w._decoyView = Object.assign(Object.create(w), { player: w.decoy, decoy: w.decoy })); }
 
 // A dodge timed into an enemy attack: brief slow-motion, the dash refreshes and the next attack counters.
 function perfectDodge(w, src) {
