@@ -39,7 +39,8 @@ const ENEMY_LOOK = {
   bone_lord: { char: 'undead_knight', weapon: 'sword_large', fit: 1.0, crown: true, rim: [0.6, 0.95, 1.0] },
 };
 // Animation used for each logical enemy anim (name, speed)
-const PROJ_COLOR = { fireball: 0xff5a2a, wave: 0x9ad8ff, firebolt: 0xffb040, orb: 0xb46aff, bolt: 0x6ae8ff, windblade: 0xe0f4ff };
+const PROJ_COLOR = { fireball: 0xff5a2a, wave: 0x9ad8ff, firebolt: 0xffb040, orb: 0xb46aff, bolt: 0x6ae8ff, windblade: 0xe0f4ff,
+  arrow: 0xd8f0ff, crescent: 0xb48aff, hook: 0xc8c0b0, flamewave: 0xff7a2a };
 const ENEMY_ANIM = {
   idle: ['idle_menace', 1], walk: ['walk', 1.1], run: ['run', 1], windup: ['heavy1', 0.45], attack: ['attack1', 1.9],
   attack2: ['attack2', 1.9], throw: ['attack3', 2], hurt: ['hurt', 1.6], death: ['death', 1.1], block: ['block', 1],
@@ -778,7 +779,7 @@ export class View {
     ch.mat.emissive.setRGB(0.06 * dg, 0.04 * dg, 0.14 * dg);
     if (p.state === 'flask') ch.mat.emissive.setRGB(0.15, 0.4, 0.3);
     if (p.rageT > 0) { ch.mat.emissive.setRGB(0.35, 0.08, 0.02); if (Math.random() < 0.4) this.particles.emit(p.x, p.y + Math.random() * 1.6, 0.4, 1, 0xff6a2a, { speed: 0.5, up: 2, life: 0.4, size: 0.25 }); }
-    pv.trail.update(ch.sword, p.state === 'attack' && p.stateTime < 0.3 / p.stats.attackSpeed, dt);
+    pv.trail.update(ch.sword, (p.state === 'attack' && p.stateTime < 0.3 / p.stats.attackSpeed) || (p.state === 'heavy' && p.stateTime < 0.35), dt);
     if (p.state === 'dash') for (let i = 0; i < 3; i++) this.particles.emit(p.x - p.facing * 0.3, p.y + 0.2 + Math.random() * 1.5, 0, 1, 0xb8a8ff, { speed: 0.4, life: 0.22, size: 0.45, dir: -p.facing * 0.3 });
     this.fx.update(dt, this.camera);
     this.playerLight.position.set(p.x + p.facing * 0.5, p.y + 2.2, 2.5);
@@ -786,7 +787,10 @@ export class View {
     if (pv.weaponId !== p.stats.weapon) { // swap the weapon model in the hero's hand
       const wp = this.weaponPiece(p.stats.weapon);
       if (ch.sword) ch.sword.parent.remove(ch.sword);
+      if (ch.offhand) { ch.offhand.parent.remove(ch.offhand); ch.offhand = null; }
       ch.sword = attachPiece(ch, 'Hand_R', wp, GRIP);
+      const off = (this.weaponList || []).find((w) => w.id === p.stats.weapon)?.offhand;
+      if (off) ch.offhand = attachPiece(ch, 'Hand_L', off, { ...GRIP, rot: [0, 0, Math.PI / 2] });
       pv.weaponId = p.stats.weapon;
     }
     if (p.stats.ward || p.tonicWard) {
@@ -871,6 +875,12 @@ export class View {
       }
       v.position.set(pr.x, pr.y - (pr.kind === 'bone' ? 0.15 : 0), 0.3);
       if (pr.kind === 'bone' || pr.kind === 'blade') { v.rotation.z += dt * (pr.kind === 'blade' ? 22 : 14); if (pr.kind === 'blade' && Math.random() < 0.6) this.particles.emit(pr.x, pr.y, 0.3, 1, 0xfff0d0, { speed: 0.5, life: 0.25, size: 0.3 }); }
+      else if (pr.kind === 'arrow') { // stretched streak aimed along its flight
+        v.material.rotation = Math.atan2(pr.vy, pr.vx); v.scale.set(pr.big ? 2.6 : 1.8, pr.big ? 0.5 : 0.32, 1);
+        if (Math.random() < (pr.spectral ? 0.9 : 0.5)) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.spectral ? 0x9ae8ff : 0xe8f4ff, { speed: 0.3, life: 0.2, size: 0.22 }); }
+      else if (pr.kind === 'crescent') { v.scale.set(1.2, 2.4, 1); if (Math.random() < 0.9) this.particles.emit(pr.x, pr.y, 0.5, 1, 0xc8a0ff, { speed: 0.6, life: 0.3, size: 0.3 }); }
+      else if (pr.kind === 'hook') { // chain back to the hand
+        const pl = world.player; for (let i = 0; i < 4; i++) { const k = Math.random(); this.particles.emit(pl.x + (pr.x - pl.x) * k, pl.y + 1 + (pr.y - pl.y - 1) * k, 0, 1, 0xb8b0a0, { speed: 0, life: 0.08, size: 0.14 }); } }
       else if (pr.kind === 'windblade') { v.scale.set(2.4, 0.7, 1); if (Math.random() < 0.8) this.particles.emit(pr.x, pr.y, 0.3, 1, 0xe0f4ff, { speed: 0.8, life: 0.2, size: 0.3 }); }
       else if (pr.kind === 'bomb') {
         v.rotation.z -= pr.vx * dt * 2;
@@ -1261,6 +1271,11 @@ export class View {
           P.emit(ev.x, ev.y, 0.6, ev.full ? 36 : 20, ev.perfect ? 0xfff4c0 : 0xffa040, { speed: 8, life: 0.4, size: 0.32, dir: ev.facing });
           if (ev.full) this.zoomPunch = Math.max(this.zoomPunch || 0, ev.perfect ? 1 : 0.5);
           vibrate(ev.perfect ? 40 : 20); break;
+        case 'counter': this.fx.impact(ev.x, ev.y, 2.8, 0xfff4c0); P.emit(ev.x, ev.y, 0.4, 20, 0xfff0a0, { speed: 6, life: 0.35, size: 0.28 }); break;
+        case 'soulspend': this.fx.ring(ev.x, ev.y, 2, 0xb48aff); P.emit(ev.x, ev.y, 0.5, 30, 0xc8a0ff, { speed: 5, up: 2, life: 0.6, size: 0.3 }); break;
+        case 'hooked': for (let i = 0; i <= 10; i++) P.emit(ev.px + (ev.x - ev.px) * i / 10, ev.py + (ev.y - ev.py) * i / 10, 0.05, 1, 0xd0c8b8, { speed: 0.3, life: 0.25, size: 0.18 }); this.fx.impact(ev.x, ev.y, 1.6, 0xe8e0d0); break;
+        case 'fracture': P.emit(ev.e.x, ev.e.y + ev.e.h * 0.6, 0.5, 10 + 6 * (ev.e.fracture || 1), 0xb0a090, { speed: 4, life: 0.5, size: 0.28, gravity: 10 }); break;
+        case 'armorbreak': this.fx.impact(ev.e.x, ev.e.y + ev.e.h * 0.6, 3.4, 0xffe0a0); P.emit(ev.e.x, ev.e.y + ev.e.h * 0.6, 0.6, 40, 0x9a8a7a, { speed: 7, life: 0.8, size: 0.35, gravity: 12 }); break;
         case 'chargeFull': this.fx.ring(ev.x, ev.y + 1, 1.2, 0xffd27a); P.emit(ev.x, ev.y + 1, 0.3, 18, 0xffe0a0, { speed: 3, life: 0.35, size: 0.25 }); vibrate(12); break;
         case 'perfectDodge':
           this.fx.ring(ev.x, ev.y + 0.9, 2.2, 0xb8e8ff); this.fx.impact(ev.x, ev.y + 0.9, 3, 0xe0f4ff);

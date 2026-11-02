@@ -88,7 +88,7 @@ export function generateFloor({seed,depth,allowedWeapons,enemyCountMul=1}) {
     if(delta>0)for(const [xx,yy] of [[x+23,end+2],[x+20,end+4]])for(let j=0;j<3;j++)put(xx+j,yy,T.PLATFORM);
     l.rooms.push({x:x+5,y:sy,w:rw-9,h:6,type:'treasure',shape:'vault',optional:true});
     entity('chest',x+12.5,sy+1);entity('merchant',x+8.5,sy+1);
-    const weapons=WEAPONS.filter(a=>a.id!=='sword'&&(!allowedWeapons||allowedWeapons.has(a.id)));
+    const weapons=[]; // one weapon per run (3.1): no altars
     if(weapons.length)entity('weapon',x+Math.min(18.5,rw-5.5),sy+1,{id:rng.pick(weapons).id});
    }
    base=end;

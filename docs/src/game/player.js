@@ -1,6 +1,7 @@
 // Player controller. Pure logic: reads an input snapshot, moves with physics.js, asks the world to resolve attacks.
 import { PLAYER as P, T, COMBAT as C } from './constants.js';
 import { moveBody } from './physics.js';
+import { weaponDef } from './weapons.js';
 
 export function createPlayer(x, y, stats) {
   return {
@@ -84,7 +85,7 @@ export function updatePlayer(p, input, dt, world) {
       break;
     }
     case 'charge': {
-      const full = C.chargeTime / (st.chargeSpeed || 1);
+      const full = C.chargeTime * weaponDef(st.weapon).charge / (st.chargeSpeed || 1);
       p.charge = Math.min(1, p.stateTime / full);
       if (p.charge >= 1 && !p.chargeFull) { p.chargeFull = true; world.chargeFx?.(p); }
       if (moveX) p.facing = Math.sign(moveX);
@@ -186,12 +187,13 @@ function doJump(p, v) { p.vy = v; p.jumpBuffer = 0; p.jumpHeldPhase = true; p.an
 function startAttack(p, input, world) {
   p.attackDir = input.y > 0.5 ? 'up' : (input.y < -0.5 && !p.onGround ? 'down' : 'side');
   if (Math.abs(input.x) > 0.3) p.facing = Math.sign(input.x);
-  p.combo = p.comboTimer > 0 && p.attackDir === 'side' ? (p.combo % 3) + 1 : 1;
+  const len = weaponDef(p.stats.weapon).combo || 3;
+  p.combo = p.comboTimer > 0 && p.attackDir === 'side' ? (p.combo % len) + 1 : 1;
   p.swingDone = false; p.queuedAttack = false;
   setState(p, 'attack');
   if (p.onGround && p.attackDir === 'side') p.vx = p.facing * 5; // small lunge
   world.sfx('swing');
-  p.anim = p.attackDir === 'down' ? 'leap' : p.attackDir === 'up' ? 'heavy2' : 'attack' + p.combo;
+  p.anim = p.attackDir === 'down' ? 'leap' : p.attackDir === 'up' ? 'heavy2' : 'attack' + (((p.combo - 1) % 3) + 1);
   p.animRestart = true;
 }
 

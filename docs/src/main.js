@@ -123,8 +123,8 @@ function wireUi() {
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play' && !DEV) setState('pause'); }); // dev links keep running for automated checks
   const touch = matchMedia('(pointer: coarse)').matches;
   $('#ctlhelp').innerHTML = touch
-    ? '<b>Left thumb</b> move · <b>Right</b> attack, jump, dash<br>Hold up/down while attacking to slash up/down · down-slash bounces off enemies'
-    : '<b>A/D</b> move · <b>Space</b> jump · <b>J</b> attack · <b>L/Shift</b> dash · <b>I</b> special · <b>H</b> heal · <b>W/E</b> interact<br>Hold W/S while attacking to slash up/down · down-slash bounces off enemies · gamepad works too';
+    ? '<b>Left thumb</b> move · <b>Right</b> attack, jump, dash · <b>hold attack</b> for a heavy strike<br>Hold up/down while attacking to slash up/down · down-slash bounces off enemies'
+    : '<b>A/D</b> move · <b>Space</b> jump · <b>J</b> attack (hold: heavy) · <b>L/Shift</b> dash · <b>I</b> special · <b>H</b> heal · <b>W/E</b> interact<br>Hold W/S while attacking to slash up/down · down-slash bounces off enemies · gamepad works too';
   updateTitleMeta();
   if (isStandaloneApp()) $('#fsbtn').classList.add('hidden'); // already running full screen from the home screen
 }

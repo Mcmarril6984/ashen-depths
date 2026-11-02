@@ -1,11 +1,12 @@
 import { PLAYER } from './constants.js';
+import { WEAPON_DEFS, STARTER_WEAPON } from './weapons.js';
 
 export function makeStats() {
   return {
     maxHp:PLAYER.maxHp, dmg:1, attackSpeed:1, moveSpeed:PLAYER.runSpeed,
     dashes:1, jumps:1, critChance:0, flaskCharges:PLAYER.flaskCharges,
     special:null, killsPerHeal:0, dashDamage:0, thorns:0,
-    weapon:'sword', bleedBurst:false, ignite:false, stormEvery:0, riposte:false,
+    weapon:STARTER_WEAPON, bleedBurst:false, ignite:false, stormEvery:0, riposte:false,
     phantomDash:false, dashTrail:false, bladeReturn:false, pogoWave:false,
     ward:0, revives:0, soulHarvest:false, lastStand:false, windBlades:false,
     bloodlust:false, juggle:false, execute:false, deflect:false,
@@ -74,22 +75,14 @@ export function applyUpgrade(stats,id) {
   return stats;
 }
 
-export const WEAPONS=[
-  ['sword','Sword','Balanced starter blade','⚔️','sword','common',1,1,1,1,null],
-  ['dagger','Twin Dagger','Finisher is a 3-hit flurry','🗡️','sword_small','common',.7,1.45,.8,.7,'flurry'],
-  ['greatsword','Greatsword','Cleaves all foes in reach and breaks guards','⚔️','sword_large','rare',1.9,.72,1.35,1.4,'cleave'],
-  ['axe','Cleaver Axe','Every hit stacks bleed','🪓','axe','common',1.15,.95,1,1,'bleed'],
-  ['mace','Skull Mace','Finisher stuns for 1.2 s','🔨','mace','rare',1.3,.85,1,2,'stun'],
-  ['hammer','War Hammer','Finisher sends ground waves both ways','🔨','hammer','epic',1.6,.75,1.1,1.6,'quake'],
-].map(([id,name,desc,icon,piece,rarity,dmgMul,speedMul,reach,knock,special])=>({id,name,desc,icon,piece,rarity,dmgMul,speedMul,reach,knock,special}));
+export const WEAPONS=WEAPON_DEFS.map(w=>({...w,special:w.id}));
 export function equipWeapon(stats,id) {
   if(!WEAPONS.some(w=>w.id===id))throw new Error('Unknown weapon: '+id);
   stats.weapon=id;return stats;
 }
 // An exhausted blessing pool produces fewer offers rather than invalid duplicates.
 export function rollShop(rng,owned={},stats=makeStats(),depth=1,allowed) {
-  const weapons=WEAPONS.filter(w=>w.id!==stats.weapon&&(!allowed||allowed.weapons.has(w.id)));
-  const weapon=weapons[Math.floor(rng.next()*weapons.length)];
+  const weapon=null; // one weapon per run (3.1): chosen in the Hearth, never sold
   const offer=(kind,item,price)=>({kind,id:item.id,name:item.name,desc:item.desc,icon:item.icon,price});
   return [
     offer('heal',{id:'heal',name:'Hearty Stew',desc:'Restore 3 HP',icon:'🍲'},25+5*depth),

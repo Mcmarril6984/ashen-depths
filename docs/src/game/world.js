@@ -71,20 +71,22 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
   };
 
   w.playerSwing = (pl, opts = {}) => {
-    const box = swingBox(pl);
-    let hitSomething = false;
     const wp = M.weaponOf(pl.stats);
-    const finisher = !opts.extra && pl.attackDir === 'side' && pl.combo === 3;
+    const finisher = !opts.extra && pl.attackDir === 'side' && pl.combo === (wp.combo || 3);
+    const wo = opts.extra ? {} : M.weaponSwing(w, pl, { finisher });
+    const box = wo.box || swingBox(pl);
+    let hitSomething = false;
     ev({ t: 'swing', x: pl.x, y: pl.y, dir: pl.attackDir, facing: pl.facing, combo: opts.extra ? 2 : pl.combo, finisher, weapon: wp.id });
     const base = pl.stats.dmg * wp.dmgMul * (finisher ? 1.5 : opts.extra ? 0.6 : 1);
     w._echoThisSwing = false; let pogoTarget = null;
+    if (wo.skip) { M.onSwing(w, pl, { finisher, extra: opts.extra }); return; } // ranged weapons fire instead
     for (const e of w.enemies) {
       if (!e.alive || !overlaps(box, e)) continue;
       hitSomething = true;
       if (pl.attackDir === 'down' && !pogoTarget) pogoTarget = e;
       const dir = pl.attackDir === 'side' ? pl.facing : Math.sign(e.x - pl.x) || pl.facing;
-      if (wp.special === 'cleave') e.guarding = false; // greatsword breaks guards
-      hitEnemy(w, e, base, dir, box, { finisher, knock: wp.knock, vertical: pl.attackDir !== 'side' ? (pl.attackDir === 'up' ? 1 : -1) : 0 });
+      hitEnemy(w, e, base, dir, box, { finisher, knock: wp.knock, mul: wo.mul, crit: wo.crit, launch: wo.launch,
+        stagger: C.staggerPerHit * (wp.stagger || 1), vertical: pl.attackDir !== 'side' ? (pl.attackDir === 'up' ? 1 : -1) : 0 });
     }
     for (const b of w.breakables) {
       if (b.alive && overlaps(box, b)) {
@@ -119,9 +121,11 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
   // Heavy (charged) attack: bigger arc, more damage and stagger. Full charge and perfect timing hit harder.
   w.playerHeavy = (pl, h = {}) => {
     const wp = M.weaponOf(pl.stats);
-    const base = swingBox(pl), k = h.full ? 1.35 : 1.15;
+    w.heavyBox = null;
+    if (M.weaponHeavy(w, pl, h)) { M.onHeavy?.(w, pl, h); return; } // the weapon's own heavy replaced the strike
+    const base = w.heavyBox || swingBox(pl), k = w.heavyBox ? 1 : h.full ? 1.35 : 1.15;
     const box = { ...base, w: base.w * k, h: base.h * (pl.attackDir === 'side' ? 1.15 : k) };
-    if (pl.attackDir === 'side') box.x = pl.x + pl.facing * (box.w / 2 + 0.1);
+    if (pl.attackDir === 'side' && !w.heavyBox) box.x = pl.x + pl.facing * (box.w / 2 + 0.1);
     const mul = (C.heavyMin + (C.heavyFull - C.heavyMin) * (h.charge || 0)) * (h.perfect ? C.perfectMul : 1);
     const dmg = pl.stats.dmg * wp.dmgMul * mul;
     ev({ t: 'swing', x: pl.x, y: pl.y, dir: pl.attackDir, facing: pl.facing, combo: 3, finisher: true, heavy: true, weapon: wp.id });
@@ -131,7 +135,8 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
       if (!e.alive || !overlaps(box, e)) continue;
       const dir = pl.attackDir === 'side' ? pl.facing : Math.sign(e.x - pl.x) || pl.facing;
       e.guarding = false; // heavy blows break guards
-      hitEnemy(w, e, dmg, dir, box, { finisher: true, heavy: true, full: h.full, perfect: h.perfect, knock: wp.knock * 1.4,
+      hitEnemy(w, e, dmg, dir, box, { finisher: true, heavy: true, full: h.full, perfect: h.perfect, empowered: h.empowered, knock: wp.knock * 1.4,
+        stagger: C.staggerHeavy * (wp.stagger || 1) * (h.full ? 1.5 : 1),
         vertical: pl.attackDir !== 'side' ? (pl.attackDir === 'up' ? 1 : -1) : 0 });
     }
     for (const b of w.breakables) if (b.alive && overlaps(box, b)) { b.alive = false; dropGold(w, b.x, b.y + 0.5, 1 + rng.int(0, 2)); ev({ t: 'break', b }); w.sfx('break'); }
@@ -182,9 +187,10 @@ export function swingBox(pl) {
   return { x: pl.x + pl.facing * 1.2 * r, y: pl.y + 0.05, w: 2.3 * r, h: 1.7 };
 }
 
-function hitEnemy(w, e, baseDmg, dir, src, { finisher = false, vertical = 0, fromProc = false, quiet = false, knock = 1, heavy = false, full = false, perfect = false, stagger = 0 } = {}) {
+function hitEnemy(w, e, baseDmg, dir, src, o = {}) {
+  const { finisher = false, vertical = 0, fromProc = false, quiet = false, knock = 1, heavy = false, full = false, stagger = 0 } = o;
   if (!e.alive) return { killed: false, blocked: false };
-  const { dmg, crit, execute } = M.shapeDamage(w, e, baseDmg, { fromPlayer: !fromProc });
+  const { dmg, crit, execute } = M.shapeDamage(w, e, baseDmg, { ...o, fromPlayer: !fromProc });
   const r = damageEnemy(e, dmg, dir || 1, w);
   // keep grunts within reach of the next combo swing; finishers (and heavy weapons) still launch them
   if (!r.killed && !e.boss && !e.armored && dir) e.vx = Math.sign(e.vx || dir) * Math.min(Math.abs(e.vx), (finisher ? 7 : 2.6) * knock);
@@ -203,7 +209,7 @@ function hitEnemy(w, e, baseDmg, dir, src, { finisher = false, vertical = 0, fro
   e.hurtFlash = 1;
   if (!r.killed) addStagger(w, e, stagger || (heavy ? C.staggerHeavy * (full ? 1.5 : 1) : fromProc ? 0.5 : C.staggerPerHit));
   if (!fromProc) { w.combo++; w.comboT = 2.2; }
-  M.onHit(w, e, r, { finisher, vertical, fromPlayer: !fromProc, src, heavy, full, perfect });
+  M.onHit(w, e, r, { ...o, finisher, vertical, fromPlayer: !fromProc, src });
   const big = heavy || finisher || crit || r.killed;
   w.events.push({ t: 'hit', x: hx, y: hy, crit, dmg, e, dir, vertical, killed: r.killed, finisher, combo: w.combo });
   w.hitStop = Math.max(w.hitStop, r.killed ? 0.07 : big ? 0.055 : 0.035);
@@ -290,7 +296,7 @@ export function updateWorld(w, input, dt) {
     w.liftDrop = (1.8 - w.descending) * 2.4;
     if (w.descending <= 0 && !w.descended) { w.descended = true; if (w.isLastFloor) w.onVictory?.(); else w.onExit?.(); }
   } else {
-    pl.atkMul = M.weaponOf(stats).speedMul || 1;
+    pl.atkMul = (M.weaponOf(stats).speedMul || 1) * (pl.atkFlow || 1);
     updatePlayer(pl, input, dt, w);
   }
 
@@ -374,7 +380,8 @@ export function updateWorld(w, input, dt) {
     } else {
       for (const e of w.enemies) {
         if (e.alive && !pr.hitSet.has(e) && overlaps(box, e)) {
-          pr.hitSet.add(e); hitEnemy(w, e, pr.dmg, Math.sign(pr.vx) || 1, pr);
+          pr.hitSet.add(e); hitEnemy(w, e, pr.dmg, Math.sign(pr.vx) || 1, pr, { fromProc: !!pr.fromProc, heavy: !!pr.heavy, full: pr.full, perfect: pr.perfect,
+            weaponHit: pr.weaponHit, ignite: pr.ignite, hook: pr.hook, launch: pr.launch, spectral: pr.spectral });
           if (!pr.pierce) { pr.alive = false; break; }
         }
       }

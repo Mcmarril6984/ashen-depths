@@ -163,3 +163,14 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    - FX events: `heavy`, `chargeFull`, `perfectDodge`, `staggered` (view.js). Attack button shows a charge ring (hud.js + CSS).
    - All tunables: `COMBAT` in `constants.js`.
    Next: status module (poison, chill/freeze), shields, slots + relics, then weapons.
+
+2. **Weapons (done, first pass).** `docs/src/game/weapons.js` holds all 8 (`WEAPON_DEFS`, starter `cinderwake`) and their
+   move sets via hooks: `weaponSwing` (reshape/skip the melee box, bow fires arrows), `weaponHeavy` (custom heavies;
+   return true to replace the default strike; may set `w.heavyBox`), `onWeaponHit`, `weaponDamage` (multipliers/crit),
+   `onWeaponKill`, `onWeaponDash`/`weaponDashTick` (dodge-through), `onWeaponPerfectDodge`, `weaponTick`.
+   `upgrades.js` `WEAPONS` now derives from `WEAPON_DEFS`; shops and floors no longer offer weapons (one per run).
+   Hearth: weapons bought under Weapons, picked under Loadout (free). Old saves: retired weapon unlocks and the
+   Armory Rack are refunded once (`RETIRED` in meta.js). New models (scythe, sickle, rapier, bow, gauntlet) are built
+   in `assets.js` `buildWeaponPieces`; off-hand pieces via `offhand`.
+   Not done yet: evolutions; Bloodletter blood shades etc. come with evolutions. Balance untested beyond smoke tests.
+   Next: status effects (poison, chill/freeze), shields, then the 59 blessings, slots + relics, evolutions.
