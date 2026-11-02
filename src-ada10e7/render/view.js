@@ -40,7 +40,8 @@ const ENEMY_LOOK = {
 };
 // Animation used for each logical enemy anim (name, speed)
 const PROJ_COLOR = { fireball: 0xff5a2a, wave: 0x9ad8ff, firebolt: 0xffb040, orb: 0xb46aff, bolt: 0x6ae8ff, windblade: 0xe0f4ff,
-  arrow: 0xd8f0ff, crescent: 0xb48aff, hook: 0xc8c0b0, flamewave: 0xff7a2a, spirit: 0x9ae8ff, ember: 0xff8a3a, darkslash: 0x6a3aaa };
+  arrow: 0xd8f0ff, crescent: 0xb48aff, hook: 0xc8c0b0, flamewave: 0xff7a2a, spirit: 0x9ae8ff, ember: 0xff8a3a, darkslash: 0x6a3aaa,
+  flask: 0xff7a2a, shard: 0xbfe8ff, xbolt: 0xf0e0c0 };
 const ENEMY_ANIM = {
   idle: ['idle_menace', 1], walk: ['walk', 1.1], run: ['run', 1], windup: ['heavy1', 0.45], attack: ['attack1', 1.9],
   attack2: ['attack2', 1.9], throw: ['attack3', 2], hurt: ['hurt', 1.6], death: ['death', 1.1], block: ['block', 1],
@@ -673,7 +674,63 @@ export class View {
     g.add(this.exitLight);
   }
 
-  // A camera-facing sprite showing an emoji (blessing icons on relics).
+  // Render a Synty kit prop to a small transparent image (item icons on buttons, cards and the Hearth). Cached.
+  pieceIcon(id, size = 128) {
+    if (!assets.pieces[id]) return null;
+    this.iconCache ||= new Map();
+    if (this.iconCache.has(id)) return this.iconCache.get(id);
+    if (!this.iconScene) {
+      this.iconScene = new THREE.Scene();
+      this.iconScene.add(new THREE.AmbientLight(0xffffff, 2.6));
+      const sun = new THREE.DirectionalLight(0xfff0e0, 3); sun.position.set(2, 3, 4); this.iconScene.add(sun);
+      const rim = new THREE.DirectionalLight(0xffd8a0, 1.6); rim.position.set(-3, 1, -2); this.iconScene.add(rim);
+      this.iconCam = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+      this.iconTarget = new THREE.WebGLRenderTarget(size, size);
+      this.iconTarget.texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    const g = assets.pieces[id], bb = g.boundingBox, mesh = new THREE.Mesh(g, assets.material);
+    const c = bb.getCenter(new THREE.Vector3()), sz = bb.getSize(new THREE.Vector3()), r = Math.max(sz.x, sz.y, sz.z) * 0.62;
+    mesh.position.sub(c); const pivot = new THREE.Group(); pivot.add(mesh); pivot.rotation.set(0.35, -0.6, 0);
+    this.iconScene.add(pivot);
+    this.iconCam.position.set(0, 0, r / Math.tan(THREE.MathUtils.degToRad(15))); this.iconCam.lookAt(0, 0, 0);
+    const prevTarget = this.renderer.getRenderTarget(), prevClear = this.renderer.getClearAlpha(), prevColor = this.renderer.getClearColor(new THREE.Color());
+    this.renderer.setRenderTarget(this.iconTarget); this.renderer.setClearColor(0x000000, 0); this.renderer.clear();
+    this.renderer.render(this.iconScene, this.iconCam);
+    const px = new Uint8Array(size * size * 4); this.renderer.readRenderTargetPixels(this.iconTarget, 0, 0, size, size, px);
+    this.renderer.setRenderTarget(prevTarget); this.renderer.setClearColor(prevColor, prevClear);
+    this.iconScene.remove(pivot);
+    const cv = document.createElement('canvas'); cv.width = cv.height = size; const ctx = cv.getContext('2d'), img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) img.data.set(px.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4); // flip rows
+    ctx.putImageData(img, 0, 0);
+    const url = cv.toDataURL(); this.iconCache.set(id, url); return url;
+  }
+
+  // A translucent, glowing Synty character for spectral allies and decoys.
+  makeGhost(kind, from) {
+    const look = kind === 'hollow' ? (ENEMY_LOOK[from] || ENEMY_LOOK.skeleton) : null;
+    const char = kind === 'knight' ? 'undead_knight' : look ? look.char : 'hero';
+    const weapon = kind === 'knight' ? 'sword_large' : kind === 'shade' ? 'sword_small' : look?.weapon || null;
+    const color = { knight: 0x9ae8ff, hollow: 0xc8a0ff, shade: 0xff3a3a, decoy: 0xc8c8ff }[kind] || 0x9ae8ff;
+    const ch = makeCharacter(char), mat = this.charMat.clone();
+    mat.map = assets.chars[char].map; mat.transparent = true; mat.depthWrite = false; mat.opacity = 0.55;
+    mat.emissive = new THREE.Color(color).multiplyScalar(0.55);
+    ch.root.traverse((o) => { if (o.isMesh) o.material = mat; });
+    if (weapon) { const w = attachPiece(ch, 'Hand_R', weapon, GRIP); if (w) w.material = mat; }
+    ch.root.updateMatrixWorld(true);
+    const hgt = new THREE.Box3().setFromObject(ch.root).getSize(new THREE.Vector3()).y || 1.8;
+    ch.root.scale.setScalar((kind === 'knight' ? 2.1 : 1.8) / hgt);
+    playAnim(ch, 'idle');
+    return { ch, mat, color, anim: 'idle' };
+  }
+
+  // A camera-facing sprite showing an image (a rendered prop icon).
+  imageSprite(url, size) {
+    const tex = new THREE.TextureLoader().load(url); tex.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+    s.scale.setScalar(size); return s;
+  }
+
+  // A camera-facing sprite showing an emoji (fallback icons).
   emojiSprite(ch, size) {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'); g.font = '96px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, 64, 72);
@@ -786,6 +843,16 @@ export class View {
     const dg = p.state === 'dash' ? 1 : 0; // faint violet tint while dashing (invulnerable)
     ch.mat.emissive.setRGB(0.06 * dg, 0.04 * dg, 0.14 * dg);
     if (p.state === 'flask') ch.mat.emissive.setRGB(0.15, 0.4, 0.3);
+    // Ashen Cloak: the hero fades to a faint shimmer
+    const cloaked = p.cloakT > 0;
+    if (ch.mat.transparent !== cloaked) { ch.mat.transparent = cloaked; ch.mat.needsUpdate = true; }
+    ch.mat.opacity = cloaked ? 0.22 + Math.sin(world.time * 12) * 0.05 : 1;
+    // Bronze Buckler raised: a bronze disc in front of the hero
+    const hasBuckler = (p.stats.items || []).includes('bronze_buckler');
+    if (hasBuckler && !ch.shieldPiece) ch.shieldPiece = attachPiece(ch, 'Hand_L', 'shield', { pos: [0, 0.05, 0], rot: [0, Math.PI / 2, 0], scale: 0.55 });
+    if (ch.shieldPiece) { ch.shieldPiece.visible = hasBuckler; ch.shieldPiece.scale.multiplyScalar(1); }
+    if (ch.shieldPiece && !hasBuckler) { ch.shieldPiece.parent.remove(ch.shieldPiece); ch.shieldPiece = null; }
+    if (p.state === 'block' && Math.random() < 0.3) this.particles.emit(p.x + p.facing * 0.6, p.y + 1.1, 0.3, 1, 0xd8a050, { speed: 0.4, life: 0.25, size: 0.25 });
     if (p.rageT > 0) { ch.mat.emissive.setRGB(0.35, 0.08, 0.02); if (Math.random() < 0.4) this.particles.emit(p.x, p.y + Math.random() * 1.6, 0.4, 1, 0xff6a2a, { speed: 0.5, up: 2, life: 0.4, size: 0.25 }); }
     pv.trail.update(ch.sword, (p.state === 'attack' && p.stateTime < 0.3 / p.stats.attackSpeed) || (p.state === 'heavy' && p.stateTime < 0.35), dt);
     if (p.state === 'dash') for (let i = 0; i < 3; i++) this.particles.emit(p.x - p.facing * 0.3, p.y + 0.2 + Math.random() * 1.5, 0, 1, 0xb8a8ff, { speed: 0.4, life: 0.22, size: 0.45, dir: -p.facing * 0.3 });
@@ -873,6 +940,8 @@ export class View {
           v = this.placePiece('bones', 0, 0, 0, { w: 0.7 });
         } else if (pr.kind === 'bomb') {
           v = this.placePiece('barrel', 0, 0, 0, { h: 0.55 });
+        } else if (pr.kind === 'flask' || pr.kind === 'shard') {
+          v = new THREE.Group(); this.placePiece(pr.kind === 'flask' ? 'lantern' : 'crystals', 0, -0.25, 0, { h: 0.55, group: v });
         } else if (pr.kind === 'blade') {
           v = new THREE.Group(); this.placePiece(pr.piece || 'sword', 0, -0.5, 0, { h: 1.1, group: v });
         } else {
@@ -884,6 +953,8 @@ export class View {
       }
       v.position.set(pr.x, pr.y - (pr.kind === 'bone' ? 0.15 : 0), 0.3);
       if (pr.kind === 'bone' || pr.kind === 'blade') { v.rotation.z += dt * (pr.kind === 'blade' ? 22 : 14); if (pr.kind === 'blade' && Math.random() < 0.6) this.particles.emit(pr.x, pr.y, 0.3, 1, 0xfff0d0, { speed: 0.5, life: 0.25, size: 0.3 }); }
+      else if (pr.kind === 'xbolt') { v.material.rotation = Math.atan2(pr.vy, pr.vx); v.scale.set(1.5, 0.28, 1); }
+      else if (pr.kind === 'flask' || pr.kind === 'shard') { v.rotation.z -= dt * 9 * Math.sign(pr.vx || 1); if (Math.random() < 0.7) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.kind === 'flask' ? 0xff8a3a : 0xd8f4ff, { speed: 0.4, life: 0.3, size: 0.24 }); }
       else if (pr.kind === 'arrow') { // stretched streak aimed along its flight
         v.material.rotation = Math.atan2(pr.vy, pr.vx); v.scale.set(pr.big ? 2.6 : 1.8, pr.big ? 0.5 : 0.32, 1);
         if (Math.random() < (pr.spectral ? 0.9 : 0.5)) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.spectral ? 0x9ae8ff : 0xe8f4ff, { speed: 0.3, life: 0.2, size: 0.22 }); }
@@ -1150,16 +1221,45 @@ export class View {
   // Merchant, weapon altars, hearts, souls, dash trails, special projectiles
   updateItems(world, dt) {
     const P = this.particles;
-    for (const c of world.clouds || []) if (Math.random() < 0.7) P.emit(c.x + (Math.random() - 0.5) * 3, c.y + Math.random() * 1.5, 0.2, 1, 0x6ad83a, { speed: 0.3, up: 0.3, life: 0.9, size: 0.6 });
-    for (const a of world.allies || []) { // spectral fighters: a shimmering silhouette of light
-      for (let i = 0; i < 3; i++) P.emit(a.x + (Math.random() - 0.5) * 0.7, a.y + Math.random() * 1.9, 0.05, 1, a.kind === 'hollow' ? 0xc8a0ff : a.kind === 'shade' ? 0xff3a3a : 0x9ae8ff, { speed: 0.3, up: 0.6, life: 0.35, size: 0.32 });
+    this.itemViews ||= new Map();
+    const live = new Set([...(world.turrets || []), ...(world.snares || [])]);
+    for (const t of live) {
+      let v = this.itemViews.get(t);
+      const turret = world.turrets?.includes(t);
+      if (!v) { v = new THREE.Group(); this.placePiece(turret ? 'brazier' : 'spikes', 0, 0, 0, turret ? { h: 1.1, group: v } : { w: 1, h: 0.45, d: 0.6, group: v }); this.levelGroup.add(v); this.itemViews.set(t, v); }
+      v.position.set(t.x, t.y, 0.2);
+      if (world.turrets?.includes(t) && Math.random() < 0.3) P.emit(t.x, t.y + 1.1, 0.2, 1, 0xff8a3a, { speed: 0.4, up: 1, life: 0.4, size: 0.2 });
     }
-    if (world.decoy) for (let i = 0; i < 2; i++) P.emit(world.decoy.x + (Math.random() - 0.5) * 0.6, world.decoy.y + Math.random() * 1.7, 0.05, 1, 0xc8c8ff, { speed: 0.2, life: 0.3, size: 0.32 });
+    for (const [t, v] of this.itemViews) if (!live.has(t)) { this.levelGroup.remove(v); this.itemViews.delete(t); }
+    for (const pool of world.pools || []) if (Math.random() < 0.8) P.emit(pool.x + (Math.random() - 0.5) * 2.6, pool.y + 0.1, 0.1, 1, 0xff6a1a, { speed: 0.3, up: 1.6, life: 0.5, size: 0.35 });
+    for (const c of world.clouds || []) if (Math.random() < 0.7) P.emit(c.x + (Math.random() - 0.5) * 3, c.y + Math.random() * 1.5, 0.2, 1, 0x6ad83a, { speed: 0.3, up: 0.3, life: 0.9, size: 0.6 });
+    // spectral allies and the Afterimage decoy: see-through Synty characters
+    this.ghostViews ||= new Map();
+    const ghosts = [...(world.allies || [])];
+    if (world.decoy) ghosts.push(world.decoy);
+    for (const a of ghosts) {
+      let v = this.ghostViews.get(a);
+      if (!v) { v = this.makeGhost(a === world.decoy ? 'decoy' : a.kind, a.from); this.levelGroup.add(v.ch.root); this.ghostViews.set(a, v); }
+      const moving = Math.abs(a.x - (v.lastX ?? a.x)) > 0.01; v.lastX = a.x;
+      const anim = a.swingT > 0 ? 'attack1' : moving ? 'run' : 'idle';
+      if (v.anim !== anim) { playAnim(v.ch, anim, { restart: anim === 'attack1', fade: 0.1, speed: anim === 'attack1' ? 1.6 : 1 }); v.anim = anim; }
+      v.ch.root.position.set(a.x, a.y, 0.1);
+      const tr = (a.facing || (a === world.decoy ? world.player.facing : 1)) * (Math.PI / 2 - 0.35);
+      v.ch.root.rotation.y += (tr - v.ch.root.rotation.y) * Math.min(1, dt * 12);
+      v.ch.mixer.update(dt);
+      v.mat.opacity = a === world.decoy ? 0.35 + 0.15 * Math.sin(world.time * 10) : Math.min(0.6, (a.ttl ?? 1) * 0.6);
+      if (Math.random() < 0.3) P.emit(a.x + (Math.random() - 0.5) * 0.6, a.y + Math.random() * 1.8, 0.05, 1, v.color, { speed: 0.3, up: 0.6, life: 0.35, size: 0.25 });
+    }
+    for (const [a, v] of this.ghostViews) if (!ghosts.includes(a)) { this.levelGroup.remove(v.ch.root); this.ghostViews.delete(a); }
     this.relicViews ||= new Map();
     for (const r of world.relics || []) {
       let v = this.relicViews.get(r);
-      if (!v) { v = this.emojiSprite(r.icon || this.blessingIcon?.(r.id) || '✦', 0.9); this.levelGroup.add(v); this.relicViews.set(r, v); }
-      v.position.set(r.x, r.y + 1 + Math.sin(world.time * 2.5 + r.x) * 0.12, 0.5);
+      if (!v) {
+        v = new THREE.Group(); this.placePiece('gem', 0, -0.35, 0, { h: 0.6, group: v });
+        const pic = this.blessingPic?.(r.id), ic = pic ? this.imageSprite(pic, 0.75) : this.emojiSprite(this.blessingIcon?.(r.id) || '✦', 0.6); ic.position.y = 0.6; v.add(ic);
+        this.levelGroup.add(v); this.relicViews.set(r, v);
+      }
+      v.position.set(r.x, r.y + 0.8 + Math.sin(world.time * 2.5 + r.x) * 0.12, 0.3); v.rotation.y = world.time * 1.2;
       if (Math.random() < 0.3) P.emit(r.x, r.y + 0.9, 0.4, 1, 0xffd27a, { speed: 0.5, up: 1, life: 0.6, size: 0.22 });
     }
     for (const [r, v] of this.relicViews) if (!(world.relics || []).includes(r)) { this.levelGroup.remove(v); this.relicViews.delete(r); }
@@ -1187,7 +1287,10 @@ export class View {
       if (!dv || dv.id !== d.id) {
         if (dv) this.levelGroup.remove(dv.holder);
         const holder = new THREE.Group();
-        this.placePiece(this.weaponPiece(d.id), 0, 0, 0, { h: 1.2, group: holder });
+        const piece = d.item && this.itemPiece?.(d.id);
+        if (piece) this.placePiece(piece, 0, -0.2, 0, { h: 0.9, group: holder });
+        else if (d.item) { const ic = this.emojiSprite(this.itemIcon?.(d.id) || '✦', 1); ic.position.y = 0.3; holder.add(ic); }
+        else this.placePiece(this.weaponPiece(d.id), 0, 0, 0, { h: 1.2, group: holder });
         const glow = this.sprite(0xffd27a, 2.4, 0.5); glow.position.y = 0.6; holder.add(glow);
         this.levelGroup.add(holder);
         dv = { holder, id: d.id }; this.dropViews.set(d, dv);
@@ -1313,6 +1416,10 @@ export class View {
         case 'fragment': P.emit(ev.x, ev.y, 0.3, 14, 0x6aff9a, { speed: 2, up: 2, life: 0.8, size: 0.3 }); break;
         case 'debt': P.emit(ev.x, ev.y + 1, 0.4, 20, 0x8a0a0a, { speed: 3, life: 0.6, size: 0.3, gravity: 8 }); break;
         case 'relicdrop': this.fx.ring(ev.x, ev.y + 0.6, 1.4, 0xffd27a); break;
+        case 'deploy': this.fx.ring(ev.x, ev.y + 0.3, 1, ev.kind === 'turret' ? 0xff9a3a : 0xc8b8a0); break;
+        case 'snare': this.fx.impact(ev.x, ev.y + 0.4, 2, 0xd0c0a0); P.emit(ev.x, ev.y + 0.3, 0.3, 18, 0xa01818, { speed: 4, up: 2, life: 0.5, size: 0.25, gravity: 10 }); break;
+        case 'cloak': P.emit(ev.x, ev.y + 1, 0.5, 30, 0x9a9aaa, { speed: 2, up: 1, life: 0.8, size: 0.5 }); break;
+        case 'itemUse': break;
         case 'counter': this.fx.impact(ev.x, ev.y, 2.8, 0xfff4c0); P.emit(ev.x, ev.y, 0.4, 20, 0xfff0a0, { speed: 6, life: 0.35, size: 0.28 }); break;
         case 'soulspend': this.fx.ring(ev.x, ev.y, 2, 0xb48aff); P.emit(ev.x, ev.y, 0.5, 30, 0xc8a0ff, { speed: 5, up: 2, life: 0.6, size: 0.3 }); break;
         case 'hooked': for (let i = 0; i <= 10; i++) P.emit(ev.px + (ev.x - ev.px) * i / 10, ev.py + (ev.y - ev.py) * i / 10, 0.05, 1, 0xd0c8b8, { speed: 0.3, life: 0.25, size: 0.18 }); this.fx.impact(ev.x, ev.y, 1.6, 0xe8e0d0); break;

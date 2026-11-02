@@ -66,15 +66,23 @@ async function boot() {
   // Synty prop renders as icons for items (falls back to the emoji when an item has no prop)
   const itemPic = (id) => { const d = itemDef(id); return d?.piece ? view.pieceIcon(d.piece) : null; };
   window.__itemIconHtml = (id) => { const pic = itemPic(id); return pic ? `<img class="pic" src="${pic}" alt="">` : null; };
+  // Any blessing, item or weapon id → its Synty prop icon (<img>), or null if it has none.
+  window.__iconHtml = (id, cls = 'pic') => {
+    const d = blessingDef(id) || itemDef(id) || WEAPONS.find((w) => w.id === id);
+    const pic = d?.piece ? view.pieceIcon(d.piece) : null;
+    return pic ? `<img class="${cls}" src="${pic}" alt="">` : null;
+  };
+  view.blessingPic = (id) => { const d = blessingDef(id); return d?.piece ? view.pieceIcon(d.piece) : null; };
   view.touchUI = matchMedia('(pointer: coarse)').matches;
   addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') view.touchUI = true; });
   input = createInput(document.body);
   hud = new Hud();
   wireUi();
   hearth = new Hearth($('#hearth'), { getMeta: () => meta, setMeta: (m) => { meta = m; writeSave(); updateTitleMeta(); }, onClose: () => setState(lastMenu), onStart: () => newRun(), sfx });
-  hearth.iconHtml = (id) => window.__itemIconHtml?.(id);
+  hearth.iconHtml = (id) => window.__iconHtml?.(id);
   hud.weaponName = (id) => WEAPONS.find((w) => w.id === id)?.name || id;
   hud.itemDef = itemDef;
+  hud.blessingHtml = (ids) => ids.split(',').filter(Boolean).map((id) => window.__iconHtml?.(id, 'mini') || UPGRADES.find((u) => u.id === id)?.icon || '').join('');
   hud.itemPic = (id) => { const d = itemDef(id); return d?.piece ? view.pieceIcon(d.piece) : null; };
   tips = new Tips($('#tip'), () => input.touch || matchMedia('(pointer: coarse)').matches);
   mapView = new MapView($('#minimap'), $('#fullmap'));
@@ -328,7 +336,7 @@ function renderShop(merchant) {
     const rarity = o.kind === 'item' ? (itemDef(o.id)?.rarity || 'common') : o.kind === 'weapon' ? (WEAPONS.find((x) => x.id === o.id)?.rarity || 'common') : (UPGRADES.find((x) => x.id === o.id)?.rarity || 'common');
     c.className = 'card ' + rarity + (afford ? '' : ' poor');
     const tag = o.kind === 'weapon' ? 'Weapon' : o.kind === 'heal' ? 'Provision' : o.kind === 'item' ? 'Item' : 'Blessing';
-    c.innerHTML = `<div class="icon">${(o.kind === 'item' && window.__itemIconHtml?.(o.id)) || o.icon || '✦'}</div><div class="name">${o.name}</div><div class="desc">${o.desc}</div>` +
+    c.innerHTML = `<div class="icon">${window.__iconHtml?.(o.id) || o.icon || '✦'}</div><div class="name">${o.name}</div><div class="desc">${o.desc}</div>` +
       `<div class="rar">${tag}</div><div class="price">${o.sold ? 'Sold' : o.price + ' gold'}</div>`;
     c.addEventListener('click', () => {
       if (o.sold || p.gold < o.price) { sfx('block'); return; }
@@ -350,7 +358,7 @@ function renderShop(merchant) {
 // on the floor that can be swapped back in.
 const CAT_NAME = { offense: 'Offensive blessing', movement: 'Movement blessing', defense: 'Defensive blessing', cursed: 'Cursed blessing', legendary: 'Legendary blessing' };
 function blessingCard(u) {
-  return `<div class="icon">${u.icon}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div><div class="rar">${CAT_NAME[u.cat] || u.rarity}</div>`;
+  return `<div class="icon">${window.__iconHtml?.(u.id) || u.icon}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div><div class="rar">${CAT_NAME[u.cat] || u.rarity}</div>`;
 }
 function setChoiceHeader(tag, title) { $('#choice .tag').textContent = tag; $('#choice h2').textContent = title; }
 function grantBlessing(id) {
@@ -495,7 +503,7 @@ function loop(t) {
   if (tips && state === 'play') tips.update(world, run, meta, (id) => { (meta.tipsSeen ||= {})[id] = true; writeSave(); });
   if (run?.killsByType) for (const ev of world.events) if (ev.t === 'kill') run.killsByType[ev.e.type] = (run.killsByType[ev.e.type] || 0) + 1;
   setCombo(world.combo);
-  if (run?.owned) hud.blessingIcons = Object.keys(run.owned).map((id) => UPGRADES.find((u) => u.id === id)?.icon || '').join('');
+  if (run?.owned) hud.blessingIds = Object.keys(run.owned).join(',');
   world.events.length = 0;
   if (state === 'play' || state === 'choice' || state === 'shop') hud.update(world, view, input.touch);
   if (state === 'play' && mapView.world === world) mapView.update();
@@ -547,13 +555,13 @@ function renderBuild() {
   const box = $('#buildlist');
   const wp = WEAPONS.find((w) => w.id === run.stats.weapon);
   const items = [];
-  if (wp) items.push({ ic: wp.icon || '⚔', name: wp.name, desc: wp.desc || '' });
+  if (wp) items.push({ ic: window.__iconHtml?.(wp.id, 'pic sm') || wp.icon || '⚔', name: wp.name, desc: wp.desc || '' });
   const evo = EVOLUTIONS.find((e) => e.id === run.stats.evolved);
   if (evo) items.push({ ic: evo.icon, name: 'Evolved: ' + evo.name, desc: evo.desc });
   else for (const e of EVOLUTIONS.filter((e) => e.weapon === run.stats.weapon)) items.push({ ic: '🔒', name: 'Evolution: ' + e.name, desc: 'Hold ' + e.needs.map((n) => blessingDef(n)?.name).join(' + ') + '. ' + e.desc });
   for (const [id, n] of Object.entries(run.owned || {})) {
     const u = UPGRADES.find((x) => x.id === id);
-    if (u) items.push({ ic: u.icon, name: u.name + (n > 1 ? ' ×' + n : ''), desc: u.desc });
+    if (u) items.push({ ic: window.__iconHtml?.(u.id, 'pic sm') || u.icon, name: u.name + (n > 1 ? ' ×' + n : ''), desc: u.desc });
   }
   box.innerHTML = items.length ? items.map((i) => `<div class="bl-item"><div class="ic">${i.ic}</div><div><b>${i.name}</b><span>${i.desc}</span></div></div>`).join('')
     : '<p>No blessings yet. Pray at a shrine to choose one.</p>';

@@ -18,14 +18,24 @@ export const assets = {
 // Models ship as glTF JSON with the binary buffer embedded as base64 (JSON is servable everywhere).
 // We decode the buffer ourselves and hand GLTFLoader an in-memory GLB, so nothing ever fetches a data: URI —
 // strict content-security policies (like the claude.ai Artifact frame) block data: fetches.
+// GitHub Pages sometimes answers a burst of requests with a stray 503, so every download retries a few times
+// (0.4 s, 1 s, 2 s, 3.5 s apart) before the loading screen reports a failure.
+export async function retry(fn, delays = [400, 1000, 2000, 3500]) {
+  for (let i = 0; ; i++) {
+    try { return await fn(i); } catch (err) { if (i >= delays.length) throw err; await new Promise((ok) => setTimeout(ok, delays[i])); }
+  }
+}
+
 async function loadModel(loader, url) {
   let doc;
   const inline = embeddedText(url);
   if (inline) doc = JSON.parse(inline);
   else {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    doc = await res.json();
+    doc = await retry(async (attempt) => {
+      const res = await fetch(attempt ? url + (url.includes('?') ? '&' : '?') + 'retry=' + attempt : url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    });
   }
   let bin = new Uint8Array(0);
   const buf = doc.buffers?.[0];
@@ -69,9 +79,9 @@ export async function loadAssets(onProgress = () => {}) {
   let total = 0, done = 0;
   // On normal web hosts (itch.io) the compact binary .glb files ship instead of the embedded-JSON copies.
   const model = (url) => globalThis.AD_GLB
-    ? tracked(url, gltf.loadAsync(url.replace('.gltf.json', '.glb')))
+    ? tracked(url, retry(() => gltf.loadAsync(url.replace('.gltf.json', '.glb'))))
     : tracked(url, loadModel(gltf, url));
-  const image = (url) => tracked(url, tex.loadAsync(assetUrl(url)));
+  const image = (url) => tracked(url, retry((attempt) => tex.loadAsync(assetUrl(url) + (attempt && !assetUrl(url).startsWith('data:') ? '?retry=' + attempt : ''))));
 
   const [atlasDp, atlas, emission, kit, anims, rigRef, ...chars] = await Promise.all([
     image('assets/tex/atlas_dp.png'),

@@ -1,11 +1,12 @@
 // The Hearth: spend Ember on unlocks, set the loadout (weapon, flask, vows), browse records.
-import { UNLOCKS, isUnlocked, canBuy, buy, vowMods, sanitizeLoadout, allowedWeapons } from '../game/meta.js';
+import { UNLOCKS, isUnlocked, canBuy, buy, vowMods, sanitizeLoadout, allowedWeapons, allowedItems } from '../game/meta.js';
+import { ITEM_DEFS } from '../game/items.js';
 const BIOMES = [['halls', 'The Dwarven Halls', '🏛️', null], ['forge', 'The Forge', '🔥', 'start_forge'], ['crypt', 'The Sunken Crypt', '💀', 'start_crypt'], ['hell', 'The Hell Gate', '😈', 'start_hell']];
 import { WEAPONS } from '../game/upgrades.js';
 import { ENEMY_TYPES } from '../game/enemies.js';
 
 const TABS = [
-  ['blessing', 'Blessings'], ['weapon', 'Weapons'], ['feature', 'Features'], ['flask', 'Flasks'], ['loadout', 'Loadout'], ['records', 'Records'],
+  ['blessing', 'Blessings'], ['weapon', 'Weapons'], ['item', 'Items'], ['feature', 'Features'], ['flask', 'Flasks'], ['loadout', 'Loadout'], ['records', 'Records'],
 ];
 const ENEMY_NAMES = {
   skeleton: 'Skeleton', skeleton_thrower: 'Bone Thrower', dwarf_undead: 'Undead Dwarf', undead_knight: 'Undead Knight', wisp: 'Ash Wisp',
@@ -55,7 +56,7 @@ export class Hearth {
       else if (check.reason === 'locked') foot = `<div class="price lock">Needs ${(u.requires || []).map((r) => UNLOCKS.find((x) => x.id === r)?.name || r).join(', ')}</div>`;
       else if (check.reason === 'condition') foot = `<div class="price lock">Reach floor ${u.condition?.best}</div>`;
       else foot = `<div class="price">${u.cost} ember</div>`;
-      c.innerHTML = `<div class="icon">${u.icon || '✦'}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div>${foot}`;
+      c.innerHTML = `<div class="icon">${this.iconHtml?.(u.id) || u.icon || '✦'}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div>${foot}`;
       c.addEventListener('click', () => {
         if (!canBuy(this.getMeta(), u.id).ok) { this.sfx('block'); return; }
         this.setMeta(buy(this.getMeta(), u.id));
@@ -89,9 +90,20 @@ export class Hearth {
       if (!allowed.has(wp.id)) continue;
       const b = document.createElement('button');
       b.className = 'pick' + (lo.weapon === wp.id ? ' on' : '') + '';
-      b.innerHTML = `<span>${wp.icon || '⚔'}</span>${wp.name}<small>${wp.kind || ''}</small>`;
+      b.innerHTML = `<span>${this.iconHtml?.(wp.id) || wp.icon || '⚔'}</span>${wp.name}<small>${wp.kind || ''}</small>`;
       b.addEventListener('click', () => { if (canPick) set({ weapon: wp.id }); else this.sfx('block'); });
       wrow.appendChild(b);
+    }
+    // starting item (slot 1); more are found on altars during the run
+    const irow = section('Starting item', 'Your first item slot. Find more on altars and at the trader.');
+    const owned = allowedItems(meta);
+    for (const it of ITEM_DEFS) {
+      if (!owned.has(it.id)) continue;
+      const b = document.createElement('button');
+      b.className = 'pick' + (lo.item === it.id ? ' on' : '');
+      b.innerHTML = `<span>${this.iconHtml?.(it.id) || it.icon}</span>${it.name}<small>${it.kind}</small>`;
+      b.addEventListener('click', () => set({ item: it.id }));
+      irow.appendChild(b);
     }
     // flask
     const frow = section('Flask');

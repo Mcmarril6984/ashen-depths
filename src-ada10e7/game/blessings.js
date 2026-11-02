@@ -56,7 +56,7 @@ const DEFS = [
   ['martyrs_flame', "Martyr's Flame", 'cursed', '🕯️', 'Charged attacks explode. Curse: each one drains your flask; with none left it builds Blood Debt that costs masks.', ['cinderwake']],
   ['fragile_divinity', 'Fragile Divinity', 'cursed', '💔', 'One more regular blessing slot. Curse: foes deal 20% more damage.', []],
   ['hunger_of_the_void', 'Hunger of the Void', 'cursed', '🕳️', 'Killing an elite: +35% damage and speed for 8 s. Curse: foes never drop hearts.', []],
-  ['the_unforgiven', 'The Unforgiven', 'cursed', '⚡', 'Critical hits reset your dash and shorten your special. Curse: drinking takes twice as long.', ['hollowpoint']],
+  ['the_unforgiven', 'The Unforgiven', 'cursed', '⚡', 'Critical hits reset your dash and take 1 s off item cooldowns. Curse: drinking takes twice as long.', ['hollowpoint']],
   ['blood_covenant', 'Blood Covenant', 'cursed', '🩸', '+35% direct damage. Curse: every second drink heals nothing.', []],
   ['glass_saint', 'Glass Saint', 'cursed', '🔷', 'Critical hits deal triple damage instead of double. Curse: lose 2 max masks (min 2).', ['hollowpoint']],
   ['the_last_flame', 'The Last Flame', 'cursed', '🔥', 'At 2 masks or fewer your hits burst into flame. Curse: the flames fill a danger meter that burns away a mask.', []],
@@ -78,7 +78,9 @@ const DEFS = [
 ];
 
 const RARITY = { offense: 'common', movement: 'common', defense: 'common', cursed: 'cursed', legendary: 'epic' };
-export const BLESSINGS = DEFS.map(([id, name, cat, icon, desc, syn]) => ({ id, name, cat, icon, desc, syn, rarity: RARITY[cat], maxStacks: 1 }));
+// The Synty kit prop shown as each blessing's icon (rendered by the view; the emoji is the fallback).
+const PIECE = {'rupture': 'bones', 'emberchain': 'hell_brazier', 'final_judgment': 'hammer', 'soul_rend': 'wisp_skull', 'plaguebearer': 'barrel', 'frostbite': 'crystals', 'executioners_mercy': 'axe', 'crimson_echo': 'barrel_stack', 'ashen_brand': 'fireplace', 'relentless_edge': 'sword', 'shatterpoint': 'gem', 'last_rites': 'sarcophagus', 'afterimage': 'statue', 'comet_dive': 'rubble', 'wind_dancer': 'tree_dead', 'reversal': 'cog', 'endless_ascent': 'crate_stack', 'shadow_pursuit': 'lantern', 'phantom_step': 'statue_m', 'falling_star': 'chandelier', 'skybreaker': 'pillar_broken', 'ghostwalk': 'door', 'featherless_wings': 'wings_l', 'predators_rhythm': 'weapon_rack', 'ashen_carapace': 'shield', 'guardian_flame': 'brazier', 'undying_will': 'statue_broken', 'soul_shelter': 'shrine', 'penance': 'obelisk_glow', 'stonebound': 'block', 'iron_resolve': 'anvil', 'gravekeepers_gift': 'chest', 'vengeful_guard': 'mace', 'second_skin': 'grate', 'deaths_refusal': 'dead_dwarf', 'unbroken_oath': 'pillar', 'ravenous_blade': 'gold_pile', 'borrowed_time': 'saw', 'martyrs_flame': 'lava_flow', 'fragile_divinity': 'window', 'hunger_of_the_void': 'hell_symbol', 'the_unforgiven': 'gold_coins', 'blood_covenant': 'hell_skull', 'glass_saint': 'obelisk', 'the_last_flame': 'lava', 'burden_of_kings': 'throne', 'deaths_bargain': 'skull_huge', 'eclipse': 'hell_rock', 'seventh_bell': 'arch', 'phoenix_soul': 'wings_r', 'thousandfold_blade': 'sword_large', 'sovereign_of_ash': 'crown', 'endless_hunt': 'statue_broken', 'crown_of_the_fallen': 'statue', 'hourglass_of_ruin': 'cog', 'heart_of_the_abyss': 'gem', 'wings_of_the_forsaken': 'wings_l', 'perfect_storm': 'obelisk_glow', 'hollow_king': 'skull_huge'};
+export const BLESSINGS = DEFS.map(([id, name, cat, icon, desc, syn]) => ({ id, name, cat, icon, desc, syn, piece: PIECE[id], rarity: RARITY[cat], maxStacks: 1 }));
 export const blessingDef = (id) => BLESSINGS.find((b) => b.id === id);
 export const REGULAR = new Set(['offense', 'movement', 'defense']);
 export const slotOf = (id) => { const c = blessingDef(id)?.cat; return REGULAR.has(c) ? 'regular' : c; };
@@ -150,7 +152,7 @@ function shield(w, why) {
   pl.shield = true; ev(w, { t: 'wardup', x: pl.x, y: pl.y }); ev(w, { t: 'shield', why });
 }
 export function applyPoison(w, e) { if (!e.alive) return; if (!(e.poisonT > 0)) e.poisonTick = B.poisonEvery; e.poisonT = B.poisonTime; }
-function addChill(w, e, n = 1) {
+export function addChill(w, e, n = 1) {
   if (!e.alive) return;
   e.chill = Math.min(B.chillMax, (e.chill || 0) + n); e.chillT = B.chillDecay;
   if (e.chill < B.chillMax) return;
@@ -357,7 +359,7 @@ export function onBleed(w, e, hadBleed) {
   e.rupture = (e.rupture || 0) + 1;
   if (e.rupture >= 5) { e.rupture = 0; w._hit(e, wDmg(w, 1.2), 1, w.player, { fromProc: true }); ev(w, { t: 'bleedburst', x: e.x, y: e.y + e.h * 0.5 }); }
 }
-export function onCrit(w) { if (has(w, 'the_unforgiven')) { const pl = w.player; pl.dashCd = 0; pl.dashLeft = pl.stats.dashes; pl.specialCd = Math.max(0, pl.specialCd - 1); } }
+export function onCrit(w) { if (has(w, 'the_unforgiven')) { const pl = w.player; pl.dashCd = 0; pl.dashLeft = pl.stats.dashes; pl.specialCd = Math.max(0, pl.specialCd - 1); if (pl.itemCd) pl.itemCd = pl.itemCd.map((c) => Math.max(0, c - 1)); } }
 export const speedMul = (w) => { const b = st(w); return (b.danceT > 0 ? 1.12 : 1) * (b.huntT > 0 ? 1.2 : 1) * (b.hungerT > 0 ? 1.2 : 1); };
 export const attackSpeedMul = (w) => 1 + 0.05 * (has(w, 'relentless_edge') ? st(w).relStacks || 0 : 0);
 
@@ -399,7 +401,8 @@ export function tick(w, dt) {
     a.ttl -= dt; a.cd -= dt;
     const t = near(w, a.x, a.y + 1, 14).sort((p, q) => Math.abs(p.x - a.x) - Math.abs(q.x - a.x))[0];
     if (t) { const dx = t.x - a.x; a.x += Math.sign(dx) * Math.min(Math.abs(dx) - 0.8 > 0 ? 6 * dt : 0, Math.abs(dx)); a.y += (t.y - a.y) * Math.min(1, dt * 4); a.facing = Math.sign(dx) || 1;
-      if (Math.abs(dx) < 1.6 && a.cd <= 0) { a.cd = a.kind === 'hollow' ? 1.1 : 0.8; w._hit(t, a.dmg, a.facing, a, { fromProc: true }); ev(w, { t: 'allyhit', x: t.x, y: t.y + t.h / 2, kind: a.kind }); } }
+      if (a.swingT > 0) a.swingT -= dt;
+      if (Math.abs(dx) < 1.6 && a.cd <= 0) { a.cd = a.kind === 'hollow' ? 1.1 : 0.8; a.swingT = 0.4; w._hit(t, a.dmg, a.facing, a, { fromProc: true }); ev(w, { t: 'allyhit', x: t.x, y: t.y + t.h / 2, kind: a.kind }); } }
     else { a.x += (pl.x - pl.facing * 1.2 - a.x) * Math.min(1, dt * 3); a.y += (pl.y - a.y) * Math.min(1, dt * 3); }
   }
   if (w.allies) w.allies = w.allies.filter((a) => a.ttl > 0);

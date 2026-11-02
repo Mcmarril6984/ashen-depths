@@ -90,7 +90,7 @@ export class Hearth {
       if (!allowed.has(wp.id)) continue;
       const b = document.createElement('button');
       b.className = 'pick' + (lo.weapon === wp.id ? ' on' : '') + '';
-      b.innerHTML = `<span>${wp.icon || '⚔'}</span>${wp.name}<small>${wp.kind || ''}</small>`;
+      b.innerHTML = `<span>${this.iconHtml?.(wp.id) || wp.icon || '⚔'}</span>${wp.name}<small>${wp.kind || ''}</small>`;
       b.addEventListener('click', () => { if (canPick) set({ weapon: wp.id }); else this.sfx('block'); });
       wrow.appendChild(b);
     }

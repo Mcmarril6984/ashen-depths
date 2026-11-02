@@ -1,9 +1,11 @@
 import { UPGRADES, WEAPONS } from './upgrades.js';
 import { STARTER_WEAPON } from './weapons.js';
+import { ITEM_DEFS, STARTER_ITEM } from './items.js';
 
 // Starter blessings (free): four of each regular kind. Everything else is bought in the Hearth.
 export const BASE_BLESSINGS = ['emberchain','crimson_echo','ashen_brand','frostbite','wind_dancer','ghostwalk','featherless_wings','predators_rhythm','guardian_flame','soul_shelter','second_skin','unbroken_oath'];
 export const BASE_WEAPONS = [STARTER_WEAPON];
+export const BASE_ITEMS = [STARTER_ITEM, 'hand_crossbow'];
 // Unlocks retired by the 3.1 rework: owners get the Ember back once, the next time the save loads.
 const RETIRED = { dagger: 25, axe: 35, mace: 45, greatsword: 60, hammer: 70, loadout: 30,
   cinder_blood: 40, storm_brand: 55, slipstream: 30, aerial_fuse: 50, blood_echo: 35, thunder_clap: 60, storm_crown: 35, riposte: 60,
@@ -23,6 +25,7 @@ export const UNLOCKS = [
     ['ashen_carapace',35],['undying_will',35],['penance',35],['stonebound',35],['iron_resolve',35],['gravekeepers_gift',40],['vengeful_guard',35],['deaths_refusal',60],
     ['ravenous_blade',50],['borrowed_time',55],['martyrs_flame',50],['fragile_divinity',60],['hunger_of_the_void',50],['the_unforgiven',50],['blood_covenant',55],['glass_saint',55],['the_last_flame',50],['burden_of_kings',50],['deaths_bargain',60],
     ['eclipse',100],['seventh_bell',90],['phoenix_soul',110],['thousandfold_blade',100],['sovereign_of_ash',100],['endless_hunt',90],['crown_of_the_fallen',110],['hourglass_of_ruin',100],['heart_of_the_abyss',100],['wings_of_the_forsaken',110],['perfect_storm',100],['hollow_king',110]]),
+  ...catalog('item',ITEM_DEFS,[['frost_shard',30],['spike_snare',30],['war_cry',35],['bronze_buckler',45],['ember_turret',50],['ashen_cloak',50]]),
   ...catalog('weapon',WEAPONS,[['bloodletter',30],['ashen_fists',35],['mourning_reaper',50],['gravehook',55],['oathbreaker',60],['hollowpoint',75],['wraithstring',80]]),
   ...[
     ['shrine_reroll','feature','Shrine Candle',40,"Reroll a shrine's blessings once",'🕯️'],
@@ -38,7 +41,7 @@ export const UNLOCKS = [
   ].map(([id,name,desc,emberBonus,icon])=>({id,cat:'vow',name,desc,emberBonus,icon,cost:0,condition:{best:3}})),
 ];
 export function defaultMeta() {
-  return {v:1,ember:0,unlocked:{},best:1,runs:0,wins:0,kills:0,bestiary:{},bosses:Object.fromEntries(BOSS_IDS.map(id=>[id,false])),loadout:{weapon:STARTER_WEAPON,flask:'heal',vows:[],startBiome:'halls'}};
+  return {v:1,ember:0,unlocked:{},best:1,runs:0,wins:0,kills:0,bestiary:{},bosses:Object.fromEntries(BOSS_IDS.map(id=>[id,false])),loadout:{weapon:STARTER_WEAPON,item:STARTER_ITEM,flask:'heal',vows:[],startBiome:'halls'}};
 }
 const count=(n,fallback=0)=>typeof n==='number'&&Number.isFinite(n)?Math.max(fallback,Math.floor(n)):fallback;
 const object=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
@@ -57,7 +60,7 @@ export function normalizeMeta(obj) {
   return m;
 }
 export function isUnlocked(meta,id) {
-  if(BASE_BLESSINGS.includes(id)||BASE_WEAPONS.includes(id))return true;
+  if(BASE_BLESSINGS.includes(id)||BASE_WEAPONS.includes(id)||BASE_ITEMS.includes(id))return true;
   const u=UNLOCKS.find(u=>u.id===id);
   if(u?.condition?.boss)return meta?.bosses?.[u.condition.boss]===true;
   return !!u&&(u.cat==='vow'?count(meta?.best,1)>=u.condition.best:meta?.unlocked?.[id]===true);
@@ -78,6 +81,7 @@ export function buy(meta,id) {
 const allowed=(meta,cat,base)=>new Set([...base,...UNLOCKS.filter(u=>u.cat===cat&&isUnlocked(meta,u.id)).map(u=>u.target)]);
 export const allowedBlessings=meta=>allowed(meta,'blessing',BASE_BLESSINGS);
 export const allowedWeapons=meta=>allowed(meta,'weapon',BASE_WEAPONS);
+export const allowedItems=meta=>allowed(meta,'item',BASE_ITEMS);
 export function vowMods(vows) {
   const ids=new Set(Array.isArray(vows)?vows:[]);
   return {enemySpeed:ids.has('vow_haste')?1.3:1,enemyCountMul:ids.has('vow_hordes')?1.5:1,noFlask:ids.has('vow_ash'),maxHp:ids.has('vow_glass')?3:null,emberMul:1+UNLOCKS.filter(u=>u.cat==='vow'&&ids.has(u.id)).reduce((n,u)=>n+u.emberBonus,0)};
@@ -96,5 +100,5 @@ export function recordRun(meta,run={},vows) {
 }
 export function sanitizeLoadout(meta) {
   const l=meta?.loadout||{};
-  return {weapon:allowedWeapons(meta).has(l.weapon)?l.weapon:STARTER_WEAPON,flask:['rage_flask','ward_flask'].includes(l.flask)&&isUnlocked(meta,l.flask)?l.flask:'heal',vows:[...new Set(Array.isArray(l.vows)?l.vows:[])].filter(id=>UNLOCKS.some(u=>u.id===id&&u.cat==='vow')&&isUnlocked(meta,id)),startBiome:['forge','crypt','hell'].includes(l.startBiome)&&isUnlocked(meta,'start_'+l.startBiome)?l.startBiome:'halls'};
+  return {item:allowedItems(meta).has(l.item)?l.item:STARTER_ITEM,weapon:allowedWeapons(meta).has(l.weapon)?l.weapon:STARTER_WEAPON,flask:['rage_flask','ward_flask'].includes(l.flask)&&isUnlocked(meta,l.flask)?l.flask:'heal',vows:[...new Set(Array.isArray(l.vows)?l.vows:[])].filter(id=>UNLOCKS.some(u=>u.id===id&&u.cat==='vow')&&isUnlocked(meta,id)),startBiome:['forge','crypt','hell'].includes(l.startBiome)&&isUnlocked(meta,'start_'+l.startBiome)?l.startBiome:'halls'};
 }

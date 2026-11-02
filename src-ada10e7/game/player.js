@@ -12,7 +12,7 @@ export function createPlayer(x, y, stats) {
     coyote: 0, jumpBuffer: 0, jumpsUsed: 0, wallLock: 0, wallDir: 0,
     dashLeft: stats.dashes, dashCd: 0, dashDir: 1,
     combo: 0, comboTimer: 0, attackDir: 'side', swingDone: false, queuedAttack: false,
-    invuln: 0, flask: stats.flaskCharges, specialCd: 0,
+    invuln: 0, flask: stats.flaskCharges, specialCd: 0, itemCd: [0, 0],
     lastSafe: { x, y }, safeTimer: 0,
     anim: 'idle', animSpeed: 1, animRestart: false, landTimer: 0, airTime: 0,
     dead: false, kills: 0, gold: 0, killsSinceHeal: 0,
@@ -42,7 +42,7 @@ export function updatePlayer(p, input, dt, world) {
 
   // --- state transitions from input -------------------------------------------------------------
   const canAct = p.state === 'move' || (p.state === 'attack' && p.swingDone);
-  if (input.dashPressed && p.dashLeft > 0 && p.dashCd <= 0 && (p.state === 'move' || p.state === 'attack' || p.state === 'charge')) {
+  if (input.dashPressed && p.dashLeft > 0 && p.dashCd <= 0 && (p.state === 'move' || p.state === 'attack' || p.state === 'charge' || p.state === 'block')) {
     p.dashLeft--; p.dashCd = p.dashLeft > 0 ? 0.12 : P.dashCooldown * (st.dashCdMul || 1);
     p.dashDur = P.dashTime * (p.dashBoost ? 1.6 : 1); p.dashBoost = false;
     p.dashDir = moveX || p.facing; p.facing = p.dashDir;
@@ -53,11 +53,10 @@ export function updatePlayer(p, input, dt, world) {
     if (canAct) startAttack(p, input, world); else p.queuedAttack = true;
   } else if (input.attack && p.atkHeld >= C.chargeDelay && p.state === 'move') {
     startCharge(p);
-  } else if (input.specialPressed && st.special && p.specialCd <= 0 && p.state === 'move') {
-    p.specialCd = st.special === 'firebolt' ? 3 : 4;
-    world.playerSpecial(p, st.special);
-    p.anim = st.special === 'firebolt' ? 'stab' : 'heavy3'; p.animRestart = true;
-    setState(p, 'cast');
+  } else if ((input.specialPressed || input.item2Pressed) && (p.state === 'move' || (p.state === 'attack' && p.swingDone))) {
+    const slot = input.specialPressed ? 0 : 1, next = world.useItem?.(p, slot);
+    if (next === 'block') { setState(p, 'block'); p.anim = 'block'; }
+    else if (next) { setState(p, 'cast'); p.anim = 'stab'; p.animRestart = true; }
   } else if (input.flaskPressed && p.flask > 0 && p.hp < st.maxHp && p.onGround && p.state === 'move' && (world.canHeal?.() ?? true)) {
     setState(p, 'flask'); world.sfx('flask');
   }
@@ -121,6 +120,11 @@ export function updatePlayer(p, input, dt, world) {
         world.healFx(p); world.onFlask?.(p); setState(p, 'move');
       }
       break;
+    case 'block': { // buckler raised: slow walk, facing locked, lowered when the button is let go
+      p.vx = approach(p.vx, moveX * speed * 0.3, P.groundAccel * dt);
+      if (!(p.blockSlot ? input.item2 : input.special)) setState(p, 'move');
+      break;
+    }
     case 'cast':
       p.vx = approach(p.vx, 0, P.groundAccel * dt);
       if (p.stateTime > 0.3) setState(p, 'move');
@@ -205,6 +209,7 @@ function pickAnim(p, moveX, sliding) {
   if (p.state === 'attack') { p.animSpeed = 1.6 * st.attackSpeed * (p.atkMul || 1); return; }
   if (p.state === 'cast') { p.animSpeed = 2; return; }
   if (p.state === 'charge') { p.anim = 'block'; p.animSpeed = 0.6; return; }
+  if (p.state === 'block') { p.anim = 'block'; p.animSpeed = 1; return; }
   if (p.state === 'heavy') { p.animSpeed = 1.5 * st.attackSpeed * (p.atkMul || 1); return; }
   if (p.state === 'dash') { p.anim = 'dodge'; p.animSpeed = 2.2; return; }
   if (p.state === 'hurt') { p.anim = 'hurt'; p.animSpeed = 1.6; return; }

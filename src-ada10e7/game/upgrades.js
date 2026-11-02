@@ -1,6 +1,7 @@
 import { PLAYER } from './constants.js';
 import { WEAPON_DEFS, STARTER_WEAPON } from './weapons.js';
 import { BLESSINGS, rollBlessings, addBlessing, removeBlessing } from './blessings.js';
+import { ITEM_DEFS } from './items.js';
 
 export function makeStats() {
   return {
@@ -12,7 +13,7 @@ export function makeStats() {
     ward:0, revives:0, soulHarvest:false, lastStand:false, windBlades:false,
     bloodlust:false, juggle:false, execute:false, deflect:false,
     shadowStep:false, flaskNova:false,
-    bless:{}, dashCdMul:1, flaskSpeed:1,
+    bless:{}, dashCdMul:1, flaskSpeed:1, items:[null,null],
     cinderBlood:false, stormBrand:false, slipstream:false, aerialFuse:false, bloodEcho:false, thunderClap:false,
   };
 }
@@ -37,6 +38,7 @@ export function rollShop(rng,owned={},stats=makeStats(),depth=1,allowed) {
   const offer=(kind,item,price)=>({kind,id:item.id,name:item.name,desc:item.desc,icon:item.icon,price});
   return [
     offer('heal',{id:'heal',name:'Hearty Stew',desc:'Restore 3 HP',icon:'🍲'},25+5*depth),
+    ...(()=>{const pool=ITEM_DEFS.filter(i=>!(stats.items||[]).includes(i.id)&&(!allowed?.items||allowed.items.has(i.id)));if(!pool.length)return [];const it=pool[Math.floor(rng.next()*pool.length)];return [{...offer('item',it,40+8*depth),kind:'item'}];})(),
     ...(weapon?[offer('weapon',weapon,({common:60,rare:90,epic:120})[weapon.rarity]+15*depth)]:[]),
     ...rollChoices(rng,owned,2,stats,allowed,depth).map(u=>offer('blessing',u,rarityPrice(u)+10*depth)),
   ];

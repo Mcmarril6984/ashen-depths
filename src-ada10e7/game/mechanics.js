@@ -22,7 +22,7 @@ export function shapeDamage(w, e, base, { fromPlayer = true, ...opts } = {}) {
   let dmg = base, crit = false, execute = false;
   if (fromPlayer) {
     const wd = W.weaponDamage(w, e, opts);
-    dmg *= wd.mul * (opts.mul || 1) * BL.damageMul(w, e, opts);
+    dmg *= (opts.item ? 1 : wd.mul) * (opts.mul || 1) * BL.damageMul(w, e, opts) * (pl.cryT > 0 ? 1.25 : 1);
     crit = opts.crit || w.rng.next() < (st.critChance || 0) + wd.crit || (st.lastStand && pl.hp === 1) || pl.nextCrit;
     pl.nextCrit = false;
     if (e.marked) { dmg *= 2; e.marked = false; ev(w, { t: 'markpop', x: e.x, y: e.y + e.h }); }
@@ -35,7 +35,7 @@ export function shapeDamage(w, e, base, { fromPlayer = true, ...opts } = {}) {
 // ---- on hit / kill --------------------------------------------------------------------------------
 export function onHit(w, e, r, o) {
   const { finisher, vertical, fromPlayer } = o;
-  if ((fromPlayer || o.weaponHit) && !o.spectral) W.onWeaponHit(w, e, r, { ...o, addBleed: (t) => addBleed(w, t) });
+  if ((fromPlayer || o.weaponHit) && !o.spectral && !o.item) W.onWeaponHit(w, e, r, { ...o, addBleed: (t) => addBleed(w, t) });
   BL.onHit(w, e, r, o);
   if (!fromPlayer || r.blocked) return;
   const pl = w.player, st = pl.stats, wp = weaponOf(st);

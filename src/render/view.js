@@ -681,8 +681,9 @@ export class View {
     if (this.iconCache.has(id)) return this.iconCache.get(id);
     if (!this.iconScene) {
       this.iconScene = new THREE.Scene();
-      this.iconScene.add(new THREE.AmbientLight(0xffffff, 1.6));
-      const sun = new THREE.DirectionalLight(0xfff0e0, 2.2); sun.position.set(2, 3, 4); this.iconScene.add(sun);
+      this.iconScene.add(new THREE.AmbientLight(0xffffff, 2.6));
+      const sun = new THREE.DirectionalLight(0xfff0e0, 3); sun.position.set(2, 3, 4); this.iconScene.add(sun);
+      const rim = new THREE.DirectionalLight(0xffd8a0, 1.6); rim.position.set(-3, 1, -2); this.iconScene.add(rim);
       this.iconCam = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
       this.iconTarget = new THREE.WebGLRenderTarget(size, size);
       this.iconTarget.texture.colorSpace = THREE.SRGBColorSpace;
@@ -704,7 +705,32 @@ export class View {
     const url = cv.toDataURL(); this.iconCache.set(id, url); return url;
   }
 
-  // A camera-facing sprite showing an emoji (blessing icons on relics).
+  // A translucent, glowing Synty character for spectral allies and decoys.
+  makeGhost(kind, from) {
+    const look = kind === 'hollow' ? (ENEMY_LOOK[from] || ENEMY_LOOK.skeleton) : null;
+    const char = kind === 'knight' ? 'undead_knight' : look ? look.char : 'hero';
+    const weapon = kind === 'knight' ? 'sword_large' : kind === 'shade' ? 'sword_small' : look?.weapon || null;
+    const color = { knight: 0x9ae8ff, hollow: 0xc8a0ff, shade: 0xff3a3a, decoy: 0xc8c8ff }[kind] || 0x9ae8ff;
+    const ch = makeCharacter(char), mat = this.charMat.clone();
+    mat.map = assets.chars[char].map; mat.transparent = true; mat.depthWrite = false; mat.opacity = 0.55;
+    mat.emissive = new THREE.Color(color).multiplyScalar(0.55);
+    ch.root.traverse((o) => { if (o.isMesh) o.material = mat; });
+    if (weapon) { const w = attachPiece(ch, 'Hand_R', weapon, GRIP); if (w) w.material = mat; }
+    ch.root.updateMatrixWorld(true);
+    const hgt = new THREE.Box3().setFromObject(ch.root).getSize(new THREE.Vector3()).y || 1.8;
+    ch.root.scale.setScalar((kind === 'knight' ? 2.1 : 1.8) / hgt);
+    playAnim(ch, 'idle');
+    return { ch, mat, color, anim: 'idle' };
+  }
+
+  // A camera-facing sprite showing an image (a rendered prop icon).
+  imageSprite(url, size) {
+    const tex = new THREE.TextureLoader().load(url); tex.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+    s.scale.setScalar(size); return s;
+  }
+
+  // A camera-facing sprite showing an emoji (fallback icons).
   emojiSprite(ch, size) {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'); g.font = '96px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, 64, 72);
@@ -1207,16 +1233,30 @@ export class View {
     for (const [t, v] of this.itemViews) if (!live.has(t)) { this.levelGroup.remove(v); this.itemViews.delete(t); }
     for (const pool of world.pools || []) if (Math.random() < 0.8) P.emit(pool.x + (Math.random() - 0.5) * 2.6, pool.y + 0.1, 0.1, 1, 0xff6a1a, { speed: 0.3, up: 1.6, life: 0.5, size: 0.35 });
     for (const c of world.clouds || []) if (Math.random() < 0.7) P.emit(c.x + (Math.random() - 0.5) * 3, c.y + Math.random() * 1.5, 0.2, 1, 0x6ad83a, { speed: 0.3, up: 0.3, life: 0.9, size: 0.6 });
-    for (const a of world.allies || []) { // spectral fighters: a shimmering silhouette of light
-      for (let i = 0; i < 3; i++) P.emit(a.x + (Math.random() - 0.5) * 0.7, a.y + Math.random() * 1.9, 0.05, 1, a.kind === 'hollow' ? 0xc8a0ff : a.kind === 'shade' ? 0xff3a3a : 0x9ae8ff, { speed: 0.3, up: 0.6, life: 0.35, size: 0.32 });
+    // spectral allies and the Afterimage decoy: see-through Synty characters
+    this.ghostViews ||= new Map();
+    const ghosts = [...(world.allies || [])];
+    if (world.decoy) ghosts.push(world.decoy);
+    for (const a of ghosts) {
+      let v = this.ghostViews.get(a);
+      if (!v) { v = this.makeGhost(a === world.decoy ? 'decoy' : a.kind, a.from); this.levelGroup.add(v.ch.root); this.ghostViews.set(a, v); }
+      const moving = Math.abs(a.x - (v.lastX ?? a.x)) > 0.01; v.lastX = a.x;
+      const anim = a.swingT > 0 ? 'attack1' : moving ? 'run' : 'idle';
+      if (v.anim !== anim) { playAnim(v.ch, anim, { restart: anim === 'attack1', fade: 0.1, speed: anim === 'attack1' ? 1.6 : 1 }); v.anim = anim; }
+      v.ch.root.position.set(a.x, a.y, 0.1);
+      const tr = (a.facing || (a === world.decoy ? world.player.facing : 1)) * (Math.PI / 2 - 0.35);
+      v.ch.root.rotation.y += (tr - v.ch.root.rotation.y) * Math.min(1, dt * 12);
+      v.ch.mixer.update(dt);
+      v.mat.opacity = a === world.decoy ? 0.35 + 0.15 * Math.sin(world.time * 10) : Math.min(0.6, (a.ttl ?? 1) * 0.6);
+      if (Math.random() < 0.3) P.emit(a.x + (Math.random() - 0.5) * 0.6, a.y + Math.random() * 1.8, 0.05, 1, v.color, { speed: 0.3, up: 0.6, life: 0.35, size: 0.25 });
     }
-    if (world.decoy) for (let i = 0; i < 2; i++) P.emit(world.decoy.x + (Math.random() - 0.5) * 0.6, world.decoy.y + Math.random() * 1.7, 0.05, 1, 0xc8c8ff, { speed: 0.2, life: 0.3, size: 0.32 });
+    for (const [a, v] of this.ghostViews) if (!ghosts.includes(a)) { this.levelGroup.remove(v.ch.root); this.ghostViews.delete(a); }
     this.relicViews ||= new Map();
     for (const r of world.relics || []) {
       let v = this.relicViews.get(r);
       if (!v) {
         v = new THREE.Group(); this.placePiece('gem', 0, -0.35, 0, { h: 0.6, group: v });
-        const ic = this.emojiSprite(r.icon || this.blessingIcon?.(r.id) || '✦', 0.6); ic.position.y = 0.55; v.add(ic);
+        const pic = this.blessingPic?.(r.id), ic = pic ? this.imageSprite(pic, 0.75) : this.emojiSprite(this.blessingIcon?.(r.id) || '✦', 0.6); ic.position.y = 0.6; v.add(ic);
         this.levelGroup.add(v); this.relicViews.set(r, v);
       }
       v.position.set(r.x, r.y + 0.8 + Math.sin(world.time * 2.5 + r.x) * 0.12, 0.3); v.rotation.y = world.time * 1.2;
