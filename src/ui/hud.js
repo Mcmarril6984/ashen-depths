@@ -75,7 +75,8 @@ export class Hud {
       if (L['item' + i] === key) continue;
       L['item' + i] = key;
       b.classList.toggle('off', !def);
-      b.querySelector('.ic').textContent = def ? def.icon : '';
+      const pic = def && this.itemPic?.(def.id);
+      b.querySelector('.ic').innerHTML = pic ? `<img src="${pic}" alt="">` : def ? def.icon : '';
       b.querySelector('.cd').style.setProperty('--p', def && def.cd ? (100 * (p.itemCd?.[i] || 0) / def.cd).toFixed(0) + '%' : '0%');
       b.setAttribute('aria-label', def ? def.name : 'Empty item slot');
     }

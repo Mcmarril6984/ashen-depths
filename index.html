@@ -398,6 +398,11 @@
     .tbtn.item .ic { font-size: 20px; }
     body.touch #b-interact, #b-interact { right: calc(150px + var(--sr)); bottom: calc(222px + var(--sb)); }
   }
+  /* Synty prop icons (items) */
+  .card .icon img.pic { width: 56px; height: 56px; object-fit: contain; filter: drop-shadow(0 2px 4px #000); }
+  .pick span img.pic { width: 30px; height: 30px; object-fit: contain; }
+  .tbtn.item .ic img { width: 30px; height: 30px; object-fit: contain; display: block; filter: drop-shadow(0 1px 2px #000); }
+  @media (max-height: 460px) { .tbtn.item .ic img { width: 26px; height: 26px; } .card .icon img.pic { width: 40px; height: 40px; } }
 </style>
 </head>
 <body>
@@ -548,7 +553,7 @@
   // Start the game. On the live site GitHub sometimes answers a burst of requests with a stray 503, which would
   // break module loading for good, so first fetch every code file with retries (this fills the browser cache),
   // then import main.js. CODE is rewritten to the versioned folder by tools/publish.sh.
-  const CODE = 'src-811517d/';
+  const CODE = 'src-a2969fa/';
   const retry = async (fn, delays = [400, 1000, 2000, 3500]) => {
     for (let i = 0; ; i++) { try { return await fn(i); } catch (e) { if (i >= delays.length) throw e; await new Promise((ok) => setTimeout(ok, delays[i])); } }
   };

@@ -56,7 +56,7 @@ export class Hearth {
       else if (check.reason === 'locked') foot = `<div class="price lock">Needs ${(u.requires || []).map((r) => UNLOCKS.find((x) => x.id === r)?.name || r).join(', ')}</div>`;
       else if (check.reason === 'condition') foot = `<div class="price lock">Reach floor ${u.condition?.best}</div>`;
       else foot = `<div class="price">${u.cost} ember</div>`;
-      c.innerHTML = `<div class="icon">${u.icon || '✦'}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div>${foot}`;
+      c.innerHTML = `<div class="icon">${this.iconHtml?.(u.id) || u.icon || '✦'}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div>${foot}`;
       c.addEventListener('click', () => {
         if (!canBuy(this.getMeta(), u.id).ok) { this.sfx('block'); return; }
         this.setMeta(buy(this.getMeta(), u.id));
@@ -101,7 +101,7 @@ export class Hearth {
       if (!owned.has(it.id)) continue;
       const b = document.createElement('button');
       b.className = 'pick' + (lo.item === it.id ? ' on' : '');
-      b.innerHTML = `<span>${it.icon}</span>${it.name}<small>${it.kind}</small>`;
+      b.innerHTML = `<span>${this.iconHtml?.(it.id) || it.icon}</span>${it.name}<small>${it.kind}</small>`;
       b.addEventListener('click', () => set({ item: it.id }));
       irow.appendChild(b);
     }
