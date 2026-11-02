@@ -1152,7 +1152,7 @@ export class View {
     const P = this.particles;
     for (const c of world.clouds || []) if (Math.random() < 0.7) P.emit(c.x + (Math.random() - 0.5) * 3, c.y + Math.random() * 1.5, 0.2, 1, 0x6ad83a, { speed: 0.3, up: 0.3, life: 0.9, size: 0.6 });
     for (const a of world.allies || []) { // spectral fighters: a shimmering silhouette of light
-      for (let i = 0; i < 3; i++) P.emit(a.x + (Math.random() - 0.5) * 0.7, a.y + Math.random() * 1.9, 0.05, 1, a.kind === 'hollow' ? 0xc8a0ff : 0x9ae8ff, { speed: 0.3, up: 0.6, life: 0.35, size: 0.32 });
+      for (let i = 0; i < 3; i++) P.emit(a.x + (Math.random() - 0.5) * 0.7, a.y + Math.random() * 1.9, 0.05, 1, a.kind === 'hollow' ? 0xc8a0ff : a.kind === 'shade' ? 0xff3a3a : 0x9ae8ff, { speed: 0.3, up: 0.6, life: 0.35, size: 0.32 });
     }
     if (world.decoy) for (let i = 0; i < 2; i++) P.emit(world.decoy.x + (Math.random() - 0.5) * 0.6, world.decoy.y + Math.random() * 1.7, 0.05, 1, 0xc8c8ff, { speed: 0.2, life: 0.3, size: 0.32 });
     this.relicViews ||= new Map();

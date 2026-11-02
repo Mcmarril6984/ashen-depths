@@ -193,3 +193,8 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    legendary auto-replace via the real UI.
    Next: weapon evolutions (spec list), tutorial lessons for heavy attack and perfect dodge, relics on the minimap,
    proper models for spectral allies, balance passes on a phone.
+
+4. **Weapon evolutions (done).** `EVOLUTIONS` + `updateEvolution(stats)` in weapons.js (`stats.evolved`), checked in
+   main.js after every blessing gain/drop (`checkEvolution`, banner). Effects live in weapons.js behind `evolved(pl, id)`.
+   Pause → Blessings lists the weapon's evolution and what it needs. The spec's "weapon-mastery alternative" route
+   is not built. Next: tutorial tips for heavy attack + perfect dodge, relics on the minimap, ally models, balance.

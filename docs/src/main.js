@@ -6,6 +6,7 @@ import { Hud } from './ui/hud.js';
 import { createWorld, updateWorld } from './game/world.js';
 import { makeStats, rollChoices, applyUpgrade, dropUpgrade, UPGRADES, WEAPONS, rollShop, equipWeapon } from './game/upgrades.js';
 import { slotOf, regularSlots, blessingDef } from './game/blessings.js';
+import { updateEvolution, EVOLUTIONS } from './game/weapons.js';
 import { makeRng } from './game/rng.js';
 import { unlockAudio, sfx, toggleMute, isMuted, setCombo } from './audio.js';
 import * as META from './game/meta.js';
@@ -343,12 +344,20 @@ function grantBlessing(id) {
   if (run.stats.maxHp > before.maxHp) p.hp += run.stats.maxHp - before.maxHp;
   p.hp = Math.min(p.hp, run.stats.maxHp);
   sfx('heal');
+  checkEvolution();
+}
+// Weapon evolutions switch on when the weapon's two blessings are held, and off while one is out of its slot.
+function checkEvolution() {
+  const was = run.stats.evolved, evo = updateEvolution(run.stats);
+  if (evo) { setTimeout(() => { hud.banner('Your weapon evolves', evo.name, 2400); sfx('boss'); world.events.push({ t: 'nova', x: world.player.x, y: world.player.y + 1, r: 3.5, color: 0xffc070 }); }, 900); }
+  else if (was && !run.stats.evolved) setTimeout(() => hud.banner('Evolution lost', EVOLUTIONS.find((e) => e.id === was)?.name || '', 1600), 900);
 }
 function dropBlessing(id) {
   const p = world.player;
   dropUpgrade(run.stats, id); delete run.owned[id];
   p.hp = Math.min(p.hp, run.stats.maxHp);
   (world.relics ||= []).push({ x: p.x - p.facing * 1.2, y: p.y, id, t: 0 });
+  checkEvolution();
   world.events.push({ t: 'relicdrop', x: p.x - p.facing * 1.2, y: p.y });
 }
 function takeBlessing(id, onDone, onCancel) {
@@ -523,6 +532,9 @@ function renderBuild() {
   const wp = WEAPONS.find((w) => w.id === run.stats.weapon);
   const items = [];
   if (wp) items.push({ ic: wp.icon || '⚔', name: wp.name, desc: wp.desc || '' });
+  const evo = EVOLUTIONS.find((e) => e.id === run.stats.evolved);
+  if (evo) items.push({ ic: evo.icon, name: 'Evolved: ' + evo.name, desc: evo.desc });
+  else for (const e of EVOLUTIONS.filter((e) => e.weapon === run.stats.weapon)) items.push({ ic: '🔒', name: 'Evolution: ' + e.name, desc: 'Hold ' + e.needs.map((n) => blessingDef(n)?.name).join(' + ') + '. ' + e.desc });
   for (const [id, n] of Object.entries(run.owned || {})) {
     const u = UPGRADES.find((x) => x.id === id);
     if (u) items.push({ ic: u.icon, name: u.name + (n > 1 ? ' ×' + n : ''), desc: u.desc });
