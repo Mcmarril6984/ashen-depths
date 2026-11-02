@@ -41,7 +41,7 @@ export function generateTutorial() {
     l.rooms.push({type:'tutorial',id:p.id,x:p.x,y:p.y,w:p.w,h:p.rows.length});
     p.rows.forEach((row,i)=>Array.from(row).forEach((c,x)=>put(p.x+x,p.y+p.rows.length-1-i,({'#':T.SOLID,'=':T.PLATFORM,'^':T.SPIKES})[c]||T.EMPTY)));
     tip(p,p.id,2,p.id==='attack'?13:p.id==='shrine'?15:p.w-2);
-    if(p.id==='attack')tip(p,'combo',13,p.w-2);
+    if(p.id==='attack'){tip(p,'combo',13,19);tip(p,'heavy',19,p.w-2);}
     if(p.id==='shrine')tip(p,'exit',15,p.w-2);
     for(const [x,y] of p.enemies||[])l.entities.push({kind:'enemy',type:'dummy',x:p.x+x+.5,y:p.y+y});
     l.entities.push({kind:'torch',x:p.x+3.5,y:p.y+p.entry+2.5});

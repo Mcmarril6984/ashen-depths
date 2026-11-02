@@ -198,3 +198,11 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    main.js after every blessing gain/drop (`checkEvolution`, banner). Effects live in weapons.js behind `evolved(pl, id)`.
    Pause → Blessings lists the weapon's evolution and what it needs. The spec's "weapon-mastery alternative" route
    is not built. Next: tutorial tips for heavy attack + perfect dodge, relics on the minimap, ally models, balance.
+
+5. **Teaching + map (done).** Tutorial attack room now has a `heavy` lesson (tips.js LESSONS, tutorial.js). One-time
+   prompts in real runs: `jit_heavy`, `jit_perfect` (first enemy wind-up nearby), `jit_relic`. Relics show on the
+   minimap (pink) and in the map legend (replacing Weapon, since floors no longer have weapon altars).
+   **Remaining work for the rework:** a tutorial room that practises the perfect dodge; real models for spectral
+   allies (knight, Hollow King copy, blood shades are particle silhouettes); the spec's weapon-mastery route to
+   evolutions; balance passes on a phone against crowds, elites, ranged foes and each boss (spec's last rule);
+   clean-up of the retired blessing code paths still in mechanics.js (old stat flags, unused but harmless).

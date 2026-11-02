@@ -5,7 +5,7 @@ import { T } from '../game/constants.js';
 const COL = {
   air: [92, 76, 62], platform: [196, 164, 112], spikes: [190, 60, 44], lava: [255, 110, 40], edge: [40, 30, 28],
 };
-const ICON = { lift: '#7dffa8', liftSealed: '#ff5a4a', shrine: '#7ad8ff', merchant: '#ffd27a', chest: '#ffe066', weapon: '#ffa04a' };
+const ICON = { lift: '#7dffa8', liftSealed: '#ff5a4a', shrine: '#7ad8ff', merchant: '#ffd27a', chest: '#ffe066', weapon: '#ffa04a', relic: '#e8a0ff' };
 
 export class MapView {
   constructor(mini, full) {
@@ -70,6 +70,7 @@ export class MapView {
     for (const s of w.shrines) if (!s.used) square(s.x, s.y, ICON.shrine, size * 1.1);
     for (const c of w.chests) if (!c.open) square(c.x, c.y, ICON.chest, size);
     for (const d of w.weaponDrops || []) square(d.x, d.y, ICON.weapon, size);
+    for (const r of w.relics || []) square(r.x, r.y + 0.5, ICON.relic, size);
     if (w.merchant) square(w.merchant.x, w.merchant.y, ICON.merchant, size * 1.1);
     if (w.lift) square(w.lift.x, w.lift.y, w.exit.open ? ICON.lift : ICON.liftSealed, size * 1.4);
     const p = w.player;
