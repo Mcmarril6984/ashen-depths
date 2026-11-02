@@ -13,8 +13,11 @@ keep=5
 tmp=$(mktemp -d)
 cp -r docs/. "$tmp"/
 cp -r "$tmp/src" "$tmp/src-$sha"   # src/ stays too, for pages cached before versioned folders existed
-sed -i "s#src=\"src/main.js\"#src=\"src-$sha/main.js\"#" "$tmp/index.html"
-grep -q "src-$sha/main.js" "$tmp/index.html" || { echo "Could not point index.html at src-$sha"; exit 1; }
+sed -i "s#const CODE = 'src/';#const CODE = 'src-$sha/';#" "$tmp/index.html"
+grep -q "const CODE = 'src-$sha/';" "$tmp/index.html" || { echo "Could not point index.html at src-$sha"; exit 1; }
+# list of code files the page pre-fetches with retries before starting the game
+(cd "$tmp/src-$sha" && find . -name '*.js' | sed 's#^\./##' | sort > modules.txt)
+cp "$tmp/src-$sha/modules.txt" "$tmp/src/modules.txt"
 git fetch -q origin gh-pages
 git checkout -q gh-pages
 git pull -q origin gh-pages

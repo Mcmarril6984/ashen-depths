@@ -532,6 +532,19 @@
 </div>
 <div id="fade"></div>
 
-<script type="module" src="src/main.js"></script>
+<script type="module">
+  // Start the game. On the live site GitHub sometimes answers a burst of requests with a stray 503, which would
+  // break module loading for good, so first fetch every code file with retries (this fills the browser cache),
+  // then import main.js. CODE is rewritten to the versioned folder by tools/publish.sh.
+  const CODE = 'src/';
+  const retry = async (fn, delays = [400, 1000, 2000, 3500]) => {
+    for (let i = 0; ; i++) { try { return await fn(i); } catch (e) { if (i >= delays.length) throw e; await new Promise((ok) => setTimeout(ok, delays[i])); } }
+  };
+  const get = (f) => retry(async () => { const r = await fetch(CODE + f); if (!r.ok) throw new Error(f + ': HTTP ' + r.status); return r; });
+  let files = [];
+  try { files = (await (await get('modules.txt')).text()).split('\n').filter(Boolean); } catch { /* local dev: no list, just import */ }
+  await Promise.all(files.map(get));
+  await import('./' + CODE + 'main.js');
+</script>
 
 </body></html>
