@@ -5,7 +5,7 @@ export class Hud {
   constructor() {
     this.el = { hud: $('#hud'), hp: $('#hp'), flask: $('#flask'), gold: $('#gold'), depth: $('#depth'), boss: $('#bossbar'),
       bossFill: $('#bossbar .fill'), banner: $('#banner'), fps: $('#fps'), interact: $('#b-interact'), kprompt: $('#kprompt'),
-      special: $('#b-special'), vignette: $('#hurtvignette'), combo: $('#combo'), loadout: $('#loadout') };
+      special: $('#b-special'), attack: $('#b-attack'), vignette: $('#hurtvignette'), combo: $('#combo'), loadout: $('#loadout') };
     this.last = {};
   }
   show(on) { this.el.hud.classList.toggle('hidden', !on); }
@@ -54,6 +54,9 @@ export class Hud {
       el.kprompt.classList.toggle('hidden', !prompt);
       L.prompt = prompt;
     }
+    // charge ring on the attack button while holding for a heavy attack
+    const ch = p.state === 'charge' ? Math.round(p.charge * 100) : 0;
+    if (L.charge !== ch) { L.charge = ch; el.attack.style.setProperty('--charge', ch + '%'); el.attack.classList.toggle('charging', ch > 0); el.attack.classList.toggle('charged', ch >= 100); }
     const sp = p.stats.special;
     el.special.classList.toggle('off', !sp);
     if (sp) {

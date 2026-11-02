@@ -1,5 +1,5 @@
 // Player controller. Pure logic: reads an input snapshot, moves with physics.js, asks the world to resolve attacks.
-import { PLAYER as P, T } from './constants.js';
+import { PLAYER as P, T, COMBAT as C } from './constants.js';
 import { moveBody } from './physics.js';
 
 export function createPlayer(x, y, stats) {
@@ -15,6 +15,7 @@ export function createPlayer(x, y, stats) {
     lastSafe: { x, y }, safeTimer: 0,
     anim: 'idle', animSpeed: 1, animRestart: false, landTimer: 0, airTime: 0,
     dead: false, kills: 0, gold: 0, killsSinceHeal: 0,
+    atkHeld: 0, charge: 0, chargeFull: false, counterT: 0, perfectThisDash: false,
   };
 }
 
@@ -28,6 +29,8 @@ export function updatePlayer(p, input, dt, world) {
   p.specialCd = Math.max(0, p.specialCd - dt);
   p.comboTimer = Math.max(0, p.comboTimer - dt);
   p.wallLock = Math.max(0, p.wallLock - dt);
+  p.counterT = Math.max(0, p.counterT - dt);
+  p.atkHeld = input.attack ? p.atkHeld + dt : 0;
   p.animRestart = false;
   if (p.dead) { p.vx *= 0.9; p.vy -= P.gravity * dt; moveBody(world.level, p, dt); p.anim = 'death'; return; }
 
@@ -37,14 +40,16 @@ export function updatePlayer(p, input, dt, world) {
 
   // --- state transitions from input -------------------------------------------------------------
   const canAct = p.state === 'move' || (p.state === 'attack' && p.swingDone);
-  if (input.dashPressed && p.dashLeft > 0 && p.dashCd <= 0 && (p.state === 'move' || p.state === 'attack')) {
+  if (input.dashPressed && p.dashLeft > 0 && p.dashCd <= 0 && (p.state === 'move' || p.state === 'attack' || p.state === 'charge')) {
     p.dashLeft--; p.dashCd = p.dashLeft > 0 ? 0.12 : P.dashCooldown;
     p.dashDir = moveX || p.facing; p.facing = p.dashDir;
     p.invuln = Math.max(p.invuln, P.dashTime + 0.05);
-    p.dashHit = new Set();
+    p.dashHit = new Set(); p.perfectThisDash = false; p.charge = 0;
     setState(p, 'dash'); world.sfx('dash'); world.dashFx(p);
   } else if (input.attackPressed && (canAct || p.state === 'attack')) {
     if (canAct) startAttack(p, input, world); else p.queuedAttack = true;
+  } else if (input.attack && p.atkHeld >= C.chargeDelay && p.state === 'move') {
+    startCharge(p);
   } else if (input.specialPressed && st.special && p.specialCd <= 0 && p.state === 'move') {
     p.specialCd = st.special === 'firebolt' ? 3 : 4;
     world.playerSpecial(p, st.special);
@@ -71,10 +76,35 @@ export function updatePlayer(p, input, dt, world) {
       const accel = p.onGround ? P.groundAccel * 0.5 : P.airAccel;
       const target = p.onGround ? moveX * speed * 0.35 : moveX * speed;
       p.vx = approach(p.vx, target, accel * dt);
+      if (t >= 1 && input.attack && p.atkHeld >= C.chargeDelay && !p.queuedAttack) { startCharge(p); break; }
       if (t >= 1) {
         setState(p, 'move'); p.comboTimer = P.comboWindow;
         if (p.queuedAttack) { p.queuedAttack = false; startAttack(p, input, world); }
       }
+      break;
+    }
+    case 'charge': {
+      const full = C.chargeTime / (st.chargeSpeed || 1);
+      p.charge = Math.min(1, p.stateTime / full);
+      if (p.charge >= 1 && !p.chargeFull) { p.chargeFull = true; world.chargeFx?.(p); }
+      if (moveX) p.facing = Math.sign(moveX);
+      const accel = p.onGround ? P.groundAccel : P.airAccel;
+      p.vx = approach(p.vx, moveX * speed * (p.onGround ? 0.25 : 0.6), accel * dt);
+      if (!input.attack) { // release: the heavy strike
+        const perfect = p.chargeFull && p.stateTime - full <= C.perfectWindow;
+        p.heavy = { charge: p.charge, full: p.chargeFull, perfect };
+        p.attackDir = input.y > 0.5 ? 'up' : (input.y < -0.5 && !p.onGround ? 'down' : 'side');
+        setState(p, 'heavy'); p.swingDone = false;
+        p.anim = p.attackDir === 'down' ? 'leap' : 'heavy3'; p.animRestart = true; world.sfx('swing');
+        if (p.onGround && p.attackDir === 'side') p.vx = p.facing * 7;
+      }
+      break;
+    }
+    case 'heavy': {
+      const dur = C.heavyTime / (st.attackSpeed * (p.atkMul || 1));
+      if (!p.swingDone && p.stateTime >= dur * 0.3) { p.swingDone = true; world.playerHeavy(p, p.heavy); }
+      p.vx = approach(p.vx, p.onGround ? 0 : moveX * speed * 0.6, P.groundAccel * 0.6 * dt);
+      if (p.stateTime >= dur) { setState(p, 'move'); p.charge = 0; p.chargeFull = false; p.combo = 0; }
       break;
     }
     case 'hurt':
@@ -147,6 +177,10 @@ export function updatePlayer(p, input, dt, world) {
   pickAnim(p, moveX, sliding);
 }
 
+function startCharge(p) {
+  setState(p, 'charge'); p.charge = 0; p.chargeFull = false; p.queuedAttack = false;
+}
+
 function doJump(p, v) { p.vy = v; p.jumpBuffer = 0; p.jumpHeldPhase = true; p.animRestart = true; }
 
 function startAttack(p, input, world) {
@@ -165,6 +199,8 @@ function pickAnim(p, moveX, sliding) {
   const st = p.stats;
   if (p.state === 'attack') { p.animSpeed = 1.6 * st.attackSpeed * (p.atkMul || 1); return; }
   if (p.state === 'cast') { p.animSpeed = 2; return; }
+  if (p.state === 'charge') { p.anim = 'block'; p.animSpeed = 0.6; return; }
+  if (p.state === 'heavy') { p.animSpeed = 1.5 * st.attackSpeed * (p.atkMul || 1); return; }
   if (p.state === 'dash') { p.anim = 'dodge'; p.animSpeed = 2.2; return; }
   if (p.state === 'hurt') { p.anim = 'hurt'; p.animSpeed = 1.6; return; }
   if (p.state === 'flask') { p.anim = 'flourish'; p.animSpeed = 1.2; return; }
@@ -201,7 +237,8 @@ export function hurtPlayer(p, dmg, dirX, world, { ignoreInvuln = false } = {}) {
   p.hp -= dmg;
   p.invuln = P.invulnAfterHit;
   p.vx = (dirX || -p.facing) * 9; p.vy = 9;
-  if (p.state === 'flask' || p.state === 'attack' || p.state === 'cast') p.queuedAttack = false;
+  if (p.state === 'flask' || p.state === 'attack' || p.state === 'cast' || p.state === 'charge' || p.state === 'heavy') p.queuedAttack = false;
+  p.charge = 0; p.chargeFull = false;
   setState(p, 'hurt');
   if (p.hp <= 0) { p.hp = 0; p.dead = true; p.animRestart = true; }
   return true;

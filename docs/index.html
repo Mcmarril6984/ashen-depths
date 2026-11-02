@@ -373,6 +373,12 @@
   .overlay h1::before { height: clamp(36px, 12vh, 90px); width: clamp(140px, 36vh, 340px); }
   .overlay h2 { font-size: clamp(20px, min(5vw, 7vh), 36px); }
   @media (max-height: 560px) { #title .controls { display: none; } }
+  /* charge ring on the attack button (heavy attack = hold attack) */
+  #b-attack::before { content: ''; position: absolute; inset: -6px; border-radius: 50%; pointer-events: none; opacity: 0;
+    background: conic-gradient(#ffc070 var(--charge, 0%), transparent 0);
+    -webkit-mask: radial-gradient(closest-side, transparent 84%, #000 86%); mask: radial-gradient(closest-side, transparent 84%, #000 86%); }
+  #b-attack.charging::before { opacity: 1; }
+  #b-attack.charged::before { background: #fff0c0; filter: drop-shadow(0 0 8px #ffc070); }
 </style>
 </head>
 <body>

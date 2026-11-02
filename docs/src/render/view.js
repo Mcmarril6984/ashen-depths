@@ -751,6 +751,11 @@ export class View {
     this.trackFps(dt);
     const p = world.player;
     this.handleEvents(world);
+    // charging a heavy attack: embers gather around the hero, brighter at full charge
+    if (p.state === 'charge' && Math.random() < 0.6) {
+      const full = p.chargeFull, a = Math.random() * Math.PI * 2, rr = full ? 0.9 : 1.4 - p.charge * 0.6;
+      this.particles.emit(p.x + Math.cos(a) * rr, p.y + 1 + Math.sin(a) * rr, 0.1, 1, full ? 0xfff0c0 : 0xffa040, { speed: 1, life: 0.3, size: full ? 0.3 : 0.22 });
+    }
 
     // player
     const pv = this.player, ch = pv.ch;
@@ -1251,6 +1256,18 @@ export class View {
         case 'wardup': P.emit(ev.x, ev.y + 1, 0.4, 16, 0x8ac8ff, { speed: 2, life: 0.5, size: 0.25 }); break;
         case 'execute': this.fx.impact(ev.x, ev.y, 3.2, 0xff3030); P.emit(ev.x, ev.y, 0.5, 40, 0xff2a2a, { speed: 8, life: 0.5, size: 0.35, gravity: 6 }); this.zoomPunch = 1; break;
         case 'weaponSwap': P.emit(ev.x, ev.y + 1, 0.3, 30, 0xffd27a, { speed: 4, up: 2, life: 0.8, size: 0.3 }); break;
+        case 'heavy':
+          this.fx.impact(ev.x, ev.y, ev.perfect ? 4.2 : ev.full ? 3.2 : 2.4, ev.perfect ? 0xffffff : 0xffc070);
+          P.emit(ev.x, ev.y, 0.6, ev.full ? 36 : 20, ev.perfect ? 0xfff4c0 : 0xffa040, { speed: 8, life: 0.4, size: 0.32, dir: ev.facing });
+          if (ev.full) this.zoomPunch = Math.max(this.zoomPunch || 0, ev.perfect ? 1 : 0.5);
+          vibrate(ev.perfect ? 40 : 20); break;
+        case 'chargeFull': this.fx.ring(ev.x, ev.y + 1, 1.2, 0xffd27a); P.emit(ev.x, ev.y + 1, 0.3, 18, 0xffe0a0, { speed: 3, life: 0.35, size: 0.25 }); vibrate(12); break;
+        case 'perfectDodge':
+          this.fx.ring(ev.x, ev.y + 0.9, 2.2, 0xb8e8ff); this.fx.impact(ev.x, ev.y + 0.9, 3, 0xe0f4ff);
+          P.emit(ev.x, ev.y + 0.9, 0.4, 30, 0xc8f0ff, { speed: 6, life: 0.45, size: 0.28 }); this.zoomPunch = Math.max(this.zoomPunch || 0, 0.6); vibrate(25); break;
+        case 'staggered':
+          P.emit(ev.e.x, ev.e.y + ev.e.h + 0.3, 0.5, 22, 0xffe070, { speed: 4, life: 0.6, size: 0.3 });
+          this.fx.impact(ev.e.x, ev.e.y + ev.e.h * 0.6, 2.6, 0xfff0a0); break;
         case 'blink': P.emit(ev.x, ev.y + 0.7, 0.3, 26, 0xb46aff, { speed: 4, life: 0.45, size: 0.3 }); this.fx.impact(ev.x, ev.y + 0.7, 1.8, 0xc890ff); break;
         case 'explode':
           P.emit(ev.x, ev.y, 0.5, 40, 0xffa040, { speed: ev.r * 5, life: 0.5, size: 0.45, gravity: 4 });

@@ -1,6 +1,6 @@
 // The run's simulation: one floor, the player, enemies, attacks, pickups and interactables.
 // Pure logic. The renderer reads state and drains `events` for effects and sound.
-import { T, PLAYER } from './constants.js';
+import { T, PLAYER, COMBAT as C, poiseOf } from './constants.js';
 import { makeRng } from './rng.js';
 import { moveBody, groundAhead, wallAhead, lineOfSight, overlaps, tileAt } from './physics.js';
 import { generateFloor } from './level/generator.js';
@@ -116,6 +116,34 @@ export function createWorld({ seed, depth, stats, carry, mods = {}, allowedWeapo
     M.onSwing(w, pl, { finisher, extra: opts.extra });
   };
 
+  // Heavy (charged) attack: bigger arc, more damage and stagger. Full charge and perfect timing hit harder.
+  w.playerHeavy = (pl, h = {}) => {
+    const wp = M.weaponOf(pl.stats);
+    const base = swingBox(pl), k = h.full ? 1.35 : 1.15;
+    const box = { ...base, w: base.w * k, h: base.h * (pl.attackDir === 'side' ? 1.15 : k) };
+    if (pl.attackDir === 'side') box.x = pl.x + pl.facing * (box.w / 2 + 0.1);
+    const mul = (C.heavyMin + (C.heavyFull - C.heavyMin) * (h.charge || 0)) * (h.perfect ? C.perfectMul : 1);
+    const dmg = pl.stats.dmg * wp.dmgMul * mul;
+    ev({ t: 'swing', x: pl.x, y: pl.y, dir: pl.attackDir, facing: pl.facing, combo: 3, finisher: true, heavy: true, weapon: wp.id });
+    ev({ t: 'heavy', x: box.x, y: box.y + box.h / 2, facing: pl.facing, full: h.full, perfect: h.perfect, w: box.w });
+    w._echoThisSwing = false;
+    for (const e of w.enemies) {
+      if (!e.alive || !overlaps(box, e)) continue;
+      const dir = pl.attackDir === 'side' ? pl.facing : Math.sign(e.x - pl.x) || pl.facing;
+      e.guarding = false; // heavy blows break guards
+      hitEnemy(w, e, dmg, dir, box, { finisher: true, heavy: true, full: h.full, perfect: h.perfect, knock: wp.knock * 1.4,
+        vertical: pl.attackDir !== 'side' ? (pl.attackDir === 'up' ? 1 : -1) : 0 });
+    }
+    for (const b of w.breakables) if (b.alive && overlaps(box, b)) { b.alive = false; dropGold(w, b.x, b.y + 0.5, 1 + rng.int(0, 2)); ev({ t: 'break', b }); w.sfx('break'); }
+    for (const c of w.chests) if (!c.open && overlaps(box, c)) openChest(w, c);
+    if (pl.attackDir === 'down') { pl.vy = 15.5; pl.dashLeft = pl.stats.dashes; pl.jumpsUsed = 0; }
+    w.shake(h.perfect ? 0.6 : h.full ? 0.45 : 0.3, pl.attackDir === 'side' ? pl.facing : 0, 0);
+    w.sfx(h.full ? 'slam' : 'hit3');
+    if (h.perfect) { w.hitStop = Math.max(w.hitStop, 0.08); w.slowmo = Math.max(w.slowmo, 0.15); }
+    M.onHeavy?.(w, pl, h);
+  };
+  w.chargeFx = (pl) => { ev({ t: 'chargeFull', x: pl.x, y: pl.y }); w.sfx('select'); };
+
   w.dashDamage = (pl) => {
     for (const e of w.enemies) {
       if (e.alive && !pl.dashHit.has(e) && overlaps(pl, e)) { pl.dashHit.add(e); hitEnemy(w, e, 1, pl.facing, pl); }
@@ -154,7 +182,7 @@ export function swingBox(pl) {
   return { x: pl.x + pl.facing * 1.2 * r, y: pl.y + 0.05, w: 2.3 * r, h: 1.7 };
 }
 
-function hitEnemy(w, e, baseDmg, dir, src, { finisher = false, vertical = 0, fromProc = false, quiet = false, knock = 1 } = {}) {
+function hitEnemy(w, e, baseDmg, dir, src, { finisher = false, vertical = 0, fromProc = false, quiet = false, knock = 1, heavy = false, full = false, perfect = false, stagger = 0 } = {}) {
   if (!e.alive) return { killed: false, blocked: false };
   const { dmg, crit, execute } = M.shapeDamage(w, e, baseDmg, { fromPlayer: !fromProc });
   const r = damageEnemy(e, dmg, dir || 1, w);
@@ -173,20 +201,40 @@ function hitEnemy(w, e, baseDmg, dir, src, { finisher = false, vertical = 0, fro
     return r;
   }
   e.hurtFlash = 1;
+  if (!r.killed) addStagger(w, e, stagger || (heavy ? C.staggerHeavy * (full ? 1.5 : 1) : fromProc ? 0.5 : C.staggerPerHit));
   if (!fromProc) { w.combo++; w.comboT = 2.2; }
-  M.onHit(w, e, r, { finisher, vertical, fromPlayer: !fromProc, src });
-  const heavy = finisher || crit || r.killed;
+  M.onHit(w, e, r, { finisher, vertical, fromPlayer: !fromProc, src, heavy, full, perfect });
+  const big = heavy || finisher || crit || r.killed;
   w.events.push({ t: 'hit', x: hx, y: hy, crit, dmg, e, dir, vertical, killed: r.killed, finisher, combo: w.combo });
-  w.hitStop = Math.max(w.hitStop, r.killed ? 0.07 : heavy ? 0.055 : 0.035);
-  w.shake(r.killed ? 0.35 : heavy ? 0.25 : 0.14, vertical ? 0 : dir, vertical);
+  w.hitStop = Math.max(w.hitStop, r.killed ? 0.07 : big ? 0.055 : 0.035);
+  w.shake(r.killed ? 0.35 : big ? 0.25 : 0.14, vertical ? 0 : dir, vertical);
   w.sfx(r.killed ? 'kill' : crit ? 'crit' : finisher ? 'hit3' : 'hit');
   if (r.killed) onKill(w, e);
   return r;
 }
 
+// Poise: hits fill a meter; when it fills the foe is staggered (helpless) for a moment.
+// Bosses need more each time, so they can't be stagger-locked.
+export function addStagger(w, e, amount) {
+  if (!e.alive) return;
+  e.poiseMax ||= poiseOf(e);
+  if (e.staggerT > 0) return;
+  e.poise = (e.poise || 0) + amount * (w.player.stats.staggerMul || 1);
+  if (e.poise < e.poiseMax) return;
+  e.poise = 0;
+  const t = e.boss ? C.bossStaggerTime : C.staggerTime;
+  e.staggerT = t; e.stunT = Math.max(e.stunT || 0, t);
+  if (e.boss) e.poiseMax = Math.round(e.poiseMax * C.bossPoiseGrowth);
+  w.events.push({ t: 'staggered', e }); w.sfx('break');
+  M.onStagger?.(w, e);
+}
+
 function onKill(w, e) {
   const pl = w.player;
   pl.kills++;
+  // ordinary foes sometimes drop a heart (1 mask); Hunger of the Void turns these off
+  if (!e.boss && !e.elite && e.type !== 'dummy' && !pl.stats.noHealDrops && w.rng.chance(C.healDropChance))
+    w.pickups.push({ x: e.x, y: e.y + e.h * 0.6, vx: 0, vy: 7, w: 0.4, h: 0.4, heart: true, value: 0, age: 0 });
   dropGold(w, e.x, e.y + e.h * 0.5, (ENEMY_TYPES[e.type]?.gold || 3));
   w.events.push({ t: 'kill', e });
   M.onKill(w, e);
@@ -253,6 +301,8 @@ export function updateWorld(w, input, dt) {
     if (e.offscreen !== false && !e.boss) e.wakeT = 0.7; // just came into view: a beat to react before it acts
     e.offscreen = false;
     if (e.wakeT > 0) { e.wakeT -= dt; e.vx = 0; e.telegraph = 0; e.anim = e.flying ? 'fly' : 'idle'; if (!e.flying) { e.vy -= 46 * dt; moveBody(w.level, e, dt); } continue; }
+    if (e.staggerT > 0) e.staggerT = Math.max(0, e.staggerT - dt);
+    e.staggered = e.staggerT > 0;
     if (e.alive && (e.stunT > 0 || e.juggleT > 0)) { // stunned (mace, parry) or juggled: helpless
       e.stunT = Math.max(0, (e.stunT || 0) - dt); e.juggleT = Math.max(0, (e.juggleT || 0) - dt);
       e.vx *= 0.9; e.telegraph = 0; e.anim = 'hurt'; e.state = 'hurt'; e.timer = 0.2;
@@ -272,7 +322,7 @@ export function updateWorld(w, input, dt) {
   // enemy hitboxes
   for (const h of w.hitboxes) {
     h.ttl -= dt;
-    if (!h.hit && !pl.dead && overlaps(h, pl)) { h.hit = true; damagePlayer(w, h.dmg, Math.sign(h.knockX || (pl.x - h.x)) || 1, h.src); }
+    if (!h.hit && !pl.dead && overlaps(h, pl)) { h.hit = true; damagePlayer(w, h.dmg, Math.sign(h.knockX || (pl.x - h.x)) || 1, h.src, true); }
   }
   w.hitboxes = w.hitboxes.filter((h) => h.ttl > 0);
 
@@ -320,7 +370,7 @@ export function updateWorld(w, input, dt) {
     }
     const box = { x: pr.x, y: pr.y - pr.r, w: pr.r * 2, h: pr.r * 2 };
     if (pr.owner === 'enemy') {
-      if (!pl.dead && overlaps(box, pl)) { pr.alive = false; damagePlayer(w, pr.dmg, Math.sign(pr.vx) || 1); }
+      if (!pl.dead && overlaps(box, pl)) { pr.alive = false; damagePlayer(w, pr.dmg, Math.sign(pr.vx) || 1, pr.src, true); }
     } else {
       for (const e of w.enemies) {
         if (e.alive && !pr.hitSet.has(e) && overlaps(box, e)) {
@@ -422,8 +472,9 @@ function explode(w, pr) {
   w.shake(0.45); w.sfx('slam');
 }
 
-function damagePlayer(w, dmg, dir, src) {
+function damagePlayer(w, dmg, dir, src, attack = false) {
   const pl = w.player;
+  if (attack && pl.state === 'dash' && pl.stateTime <= C.perfectDodgeWindow && !pl.dead) { perfectDodge(w, src); return; }
   if (M.preventHurt(w, dir, src)) return; // parry / ward
   if (!hurtPlayer(pl, dmg, dir, w)) return;
   if (pl.dead) M.tryRevive(w);
@@ -431,6 +482,18 @@ function damagePlayer(w, dmg, dir, src) {
   w.events.push({ t: 'hurt', x: pl.x, y: pl.y + 1 });
   w.sfx('hurt');
   if (src && src.alive && pl.stats.thorns) hitEnemy(w, src, pl.stats.thorns, -dir, pl);
+}
+
+// A dodge timed into an enemy attack: brief slow-motion, the dash refreshes and the next attack counters.
+function perfectDodge(w, src) {
+  const pl = w.player;
+  if (pl.perfectThisDash) return;
+  pl.perfectThisDash = true;
+  pl.counterT = C.counterWindow; pl.dashLeft = pl.stats.dashes; pl.dashCd = 0;
+  pl.invuln = Math.max(pl.invuln, 0.3);
+  w.slowmo = Math.max(w.slowmo, 0.35);
+  w.events.push({ t: 'perfectDodge', x: pl.x, y: pl.y }); w.sfx('parry');
+  M.onPerfectDodge?.(w, pl, src);
 }
 
 // w.viewRect is set by the renderer each frame ({x0,x1,y0,y1} in world units); without a view, use distance.

@@ -143,3 +143,23 @@ phone viewport with that build, check the FX are readable, and keep the old tuto
 - Commit in small steps with clear messages. Don't push to `gh-pages` until a batch is playable end to end.
 - When something in the spec conflicts with the existing game (mask health, single attack button, no heal drops),
   pick the reading that keeps the game playable on a phone, note the decision in `design/decisions.md`, and continue.
+
+## Progress log (keep this current; newest last)
+
+Each entry: what's done, where, and what's next. Whoever stops work updates this before stopping.
+
+1. **Combat foundation (done).**
+   - Heavy = charged attack: `player.js` states `charge` → `heavy`; hold attack after a swing (or from idle) for
+     `COMBAT.chargeDelay`, full at `chargeTime`; release inside `perfectWindow` after full = perfect.
+     `world.playerHeavy(pl, {charge, full, perfect})` does the hit; hook `M.onHeavy(w, pl, h)` (optional, add in mechanics.js).
+     Hit opts now carry `heavy/full/perfect` into `M.onHit`.
+   - Perfect dodge: `damagePlayer(..., attack=true)` from enemy hitboxes/projectiles during the first
+     `perfectDodgeWindow` s of a dash → `perfectDodge()`: no damage, slow-mo, dash refreshed, `pl.counterT` set.
+     Hook `M.onPerfectDodge(w, pl, src)`. Contact damage never counts.
+   - Stagger: `addStagger(w, e, amount)` (exported from world.js) fills `e.poise` to `poiseOf(e)`; full = `e.staggerT`
+     (also sets `stunT`), `e.staggered` flag each frame, bosses' poise grows ×1.5 per stagger. Hook `M.onStagger(w, e)`.
+     `stats.staggerMul` scales stagger (for Burden of Kings etc.).
+   - Heal drops: ordinary foes drop a heart (1 mask) at `COMBAT.healDropChance`; `stats.noHealDrops` disables.
+   - FX events: `heavy`, `chargeFull`, `perfectDodge`, `staggered` (view.js). Attack button shows a charge ring (hud.js + CSS).
+   - All tunables: `COMBAT` in `constants.js`.
+   Next: status module (poison, chill/freeze), shields, slots + relics, then weapons.
