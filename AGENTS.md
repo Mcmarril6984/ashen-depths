@@ -1,6 +1,7 @@
 # Ashen Depths — handoff for coding agents
 
-Read this whole file before changing anything. The current task is the **weapon & blessing rework** in
+Read this whole file and `design/decisions.md` (owner decisions that override the spec) before changing anything.
+The current task is the **weapon & blessing rework** in
 `design/rework-3.1.md` (the owner's design doc; treat it as the spec, keep its names and numbers).
 
 ## What the game is
@@ -74,11 +75,12 @@ no slots (blessings just accumulate, max 1 stack each), no shields except Wardin
 
 New systems the spec depends on (build these first, in this order):
 
-1. **Heavy / charged attack.** Hold attack to charge (release = charged heavy). Needs input hold timing in `input.js`
-   (`held.attack` already exists), player states and animations in `player.js`, a "perfectly timed" release window
-   (Cinderwake), and touch UX that works on a phone (hold the attack button; show a charge ring on it).
-   Decide and document: is "heavy attack" = charged attack, or the combo finisher? The spec uses both words; ask the
-   owner if unclear, otherwise treat combo finishers as heavy and fully charged releases as charged + heavy.
+1. **Heavy / charged attack (decided: they are the same move).** Tap attack = normal combo. **Hold** attack =
+   charge; releasing fires the heavy/charged attack. Every "heavy attack" and "charged attack" in the spec means this
+   one move. Combo finishers are NOT heavy attacks. "Fully charged" = held to the end of the charge; "perfectly
+   timed" (Cinderwake) = released in a short window right at full charge. Needs hold timing in `input.js`
+   (`held.attack` exists; add a release event), a charge state + animation in `player.js`, and a charge ring on the
+   touch attack button. A tap must still feel instant: start charging only after ~0.18 s of holding.
 2. **Perfect dodge.** A dash that starts within a short window (~0.12 s) before an enemy hit would land. Detect in
    `hurtPlayer`/enemy attack resolution while dashing; emit an event, slow-mo flash, and set a `perfectDodge` timer the
    blessings read. Many blessings key off it (Reversal, Phantom Step, Second Skin, Hourglass, Perfect Storm, Hollowpoint, Ashen Fists).
@@ -87,16 +89,19 @@ New systems the spec depends on (build these first, in this order):
 4. **Status effects as data**: burn (exists), bleed (exists), poison, chill → freeze, marks, armor fracture. One
    module with apply/tick/consume, caps, and a per-target cooldown for procs.
 5. **Shields** separate from masks (one shield at a time; absorbs one hit), shown in the HUD next to the masks.
-6. **Slots and replacement UI**: 6 regular, 1 legendary, 1 cursed. When full, the shrine/shop asks which one to
-   replace (never delete randomly). Show slots in the pause menu's Blessings tab. Rarity becomes category:
-   offensive/movement/defensive/cursed/legendary.
+6. **Slots (decided: no replace screen).** 6 regular, 1 legendary, 1 cursed. A new legendary or cursed blessing
+   **automatically replaces** the one in its slot (tell the player with a banner: "X replaces Y"). Regular
+   blessings are never removed: once all 6 regular slots are full, stop offering regular blessings (shrines and
+   shops offer legendary, cursed, evolution, flask refill or gold instead). Show slots in the pause menu's Blessings
+   tab. Rarity becomes category: offensive/movement/defensive/cursed/legendary.
 7. **Evolutions**: when weapon + the two listed blessings are owned, offer the evolution (doesn't use a slot). Leave a
    hook for the spec's "weapon-mastery alternative".
 8. **Summons / echoes** (blood shades, spectral knight, Hollow King copy, Thousandfold copies, Crimson Echo):
    one generic "spectral repeat" helper that replays a hit at X% damage with `fromProc: true` and can never
    trigger itself.
-9. **Healing resource drops** (Hunger of the Void references "ordinary enemies drop healing resources"; the game
-   doesn't have these yet). Either add small heal-fragment drops or reword the curse; ask the owner.
+9. **Heal drops (decided).** Ordinary (non-elite, non-boss) enemies sometimes drop a small pickup that heals
+   **1 mask** when touched (not above max). Start around a 10% drop chance, keep it in the balance table. Hunger of
+   the Void's curse turns these drops off.
 
 Then weapons (8). Map onto the existing visual pieces where possible:
 Cinderwake → `sword_large`, Bloodletter → `sword_small` (dual), Oathbreaker → `hammer`, Hollowpoint → `sword_small`
