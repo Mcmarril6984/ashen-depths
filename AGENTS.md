@@ -212,3 +212,7 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    point there; the last 5 versions kept, listed in gh-pages `versions.txt`). index.html has a boot guard: if code
    fails to load or start it shows a message and a Reload button (`#reloadbtn`); main.js sets `window.__booted`.
    Never reference `src/` by path from code; always import relatively.
+7. **Download retries (done).** GitHub Pages randomly answers bursts with 503s. `render/assets.js` `retry()` wraps
+   every model/texture download; index.html pre-fetches all code files listed in `<code folder>/modules.txt` (written
+   by publish.sh) with retries before `import()`ing main.js. Local dev has no modules.txt and just imports.
+   Tested with every file failing its first request: the game still starts.
