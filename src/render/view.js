@@ -75,10 +75,27 @@ export class View {
     this.post = new Post(this.renderer, this.scene, this.camera);
     this.resize();
     addEventListener('resize', () => this.resize());
+    addEventListener('orientationchange', () => setTimeout(() => this.resize(), 300));
+    window.visualViewport?.addEventListener('resize', () => this.resize());
+  }
+
+  // Size the drawing buffer from the canvas's real on-screen box. iPhones (home-screen mode, rotation) can
+  // report innerWidth/innerHeight that differ from the CSS size, which squashes or stretches the picture.
+  canvasSize() {
+    const c = this.renderer.domElement;
+    const w = Math.round(c.clientWidth) || innerWidth, h = Math.round(c.clientHeight) || innerHeight;
+    return [Math.max(1, w), Math.max(1, h)];
+  }
+
+  // Cheap per-frame check: resize events on iOS often fire before the new size is known, or not at all.
+  checkSize() {
+    const [w, h] = this.canvasSize();
+    if (w !== this._w || h !== this._h) this.resize();
   }
 
   resize() {
-    const w = innerWidth, h = innerHeight;
+    const [w, h] = this.canvasSize();
+    this._w = w; this._h = h;
     this.renderer.setSize(w, h, false);
     this.post?.setSize(w, h);
     this.camera.aspect = w / h;
@@ -730,6 +747,7 @@ export class View {
 
   // ---------------------------------------------------------------- per frame
   render(world, dt, alpha = 1) {
+    this.checkSize();
     this.trackFps(dt);
     const p = world.player;
     this.handleEvents(world);
