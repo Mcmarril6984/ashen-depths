@@ -92,7 +92,12 @@ New systems the spec depends on (build these first, in this order):
 6. **Slots (decided: no replace screen).** 6 regular, 1 legendary, 1 cursed. A new legendary or cursed blessing
    **automatically replaces** the one in its slot (tell the player with a banner: "X replaces Y"). Regular
    blessings are never removed: once all 6 regular slots are full, stop offering regular blessings (shrines and
-   shops offer legendary, cursed, evolution, flask refill or gold instead). Show slots in the pause menu's Blessings
+   shops offer legendary, cursed, evolution, flask refill or gold instead).
+   **Relics (decided):** a replaced blessing is never lost. It drops at the player's feet as a small floating relic
+   (the blessing's icon in a glowing reliquary). Standing on it shows the interact button ("Swap"); interacting
+   swaps it back into its slot, and the blessing it displaces drops as a relic in its place. Relics stay until the
+   player leaves the floor, show on the minimap, and an evolution that depended on the swapped-out blessing is
+   lost while that blessing is out of its slot. Show slots in the pause menu's Blessings
    tab. Rarity becomes category: offensive/movement/defensive/cursed/legendary.
 7. **Evolutions**: when weapon + the two listed blessings are owned, offer the evolution (doesn't use a slot). Leave a
    hook for the spec's "weapon-mastery alternative".
