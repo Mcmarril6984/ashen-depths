@@ -56,7 +56,7 @@ const DEFS = [
   ['martyrs_flame', "Martyr's Flame", 'cursed', '🕯️', 'Charged attacks explode. Curse: each one drains your flask; with none left it builds Blood Debt that costs masks.', ['cinderwake']],
   ['fragile_divinity', 'Fragile Divinity', 'cursed', '💔', 'One more regular blessing slot. Curse: foes deal 20% more damage.', []],
   ['hunger_of_the_void', 'Hunger of the Void', 'cursed', '🕳️', 'Killing an elite: +35% damage and speed for 8 s. Curse: foes never drop hearts.', []],
-  ['the_unforgiven', 'The Unforgiven', 'cursed', '⚡', 'Critical hits reset your dash and shorten your special. Curse: drinking takes twice as long.', ['hollowpoint']],
+  ['the_unforgiven', 'The Unforgiven', 'cursed', '⚡', 'Critical hits reset your dash and take 1 s off item cooldowns. Curse: drinking takes twice as long.', ['hollowpoint']],
   ['blood_covenant', 'Blood Covenant', 'cursed', '🩸', '+35% direct damage. Curse: every second drink heals nothing.', []],
   ['glass_saint', 'Glass Saint', 'cursed', '🔷', 'Critical hits deal triple damage instead of double. Curse: lose 2 max masks (min 2).', ['hollowpoint']],
   ['the_last_flame', 'The Last Flame', 'cursed', '🔥', 'At 2 masks or fewer your hits burst into flame. Curse: the flames fill a danger meter that burns away a mask.', []],
@@ -150,7 +150,7 @@ function shield(w, why) {
   pl.shield = true; ev(w, { t: 'wardup', x: pl.x, y: pl.y }); ev(w, { t: 'shield', why });
 }
 export function applyPoison(w, e) { if (!e.alive) return; if (!(e.poisonT > 0)) e.poisonTick = B.poisonEvery; e.poisonT = B.poisonTime; }
-function addChill(w, e, n = 1) {
+export function addChill(w, e, n = 1) {
   if (!e.alive) return;
   e.chill = Math.min(B.chillMax, (e.chill || 0) + n); e.chillT = B.chillDecay;
   if (e.chill < B.chillMax) return;
@@ -357,7 +357,7 @@ export function onBleed(w, e, hadBleed) {
   e.rupture = (e.rupture || 0) + 1;
   if (e.rupture >= 5) { e.rupture = 0; w._hit(e, wDmg(w, 1.2), 1, w.player, { fromProc: true }); ev(w, { t: 'bleedburst', x: e.x, y: e.y + e.h * 0.5 }); }
 }
-export function onCrit(w) { if (has(w, 'the_unforgiven')) { const pl = w.player; pl.dashCd = 0; pl.dashLeft = pl.stats.dashes; pl.specialCd = Math.max(0, pl.specialCd - 1); } }
+export function onCrit(w) { if (has(w, 'the_unforgiven')) { const pl = w.player; pl.dashCd = 0; pl.dashLeft = pl.stats.dashes; pl.specialCd = Math.max(0, pl.specialCd - 1); if (pl.itemCd) pl.itemCd = pl.itemCd.map((c) => Math.max(0, c - 1)); } }
 export const speedMul = (w) => { const b = st(w); return (b.danceT > 0 ? 1.12 : 1) * (b.huntT > 0 ? 1.2 : 1) * (b.hungerT > 0 ? 1.2 : 1); };
 export const attackSpeedMul = (w) => 1 + 0.05 * (has(w, 'relentless_edge') ? st(w).relStacks || 0 : 0);
 

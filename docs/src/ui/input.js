@@ -1,5 +1,5 @@
 // Unified input: touch (floating stick + buttons), keyboard and gamepad → one snapshot per frame.
-const BTN = ['jump', 'attack', 'dash', 'special', 'flask', 'interact'];
+const BTN = ['jump', 'attack', 'dash', 'special', 'item2', 'flask', 'interact'];
 
 export function createInput(root) {
   const held = Object.fromEntries(BTN.map((b) => [b, false]));
@@ -13,7 +13,7 @@ export function createInput(root) {
   const KEYMAP = {
     Space: 'jump', KeyK: 'jump', KeyZ: 'jump', ArrowUp: null,
     KeyJ: 'attack', KeyX: 'attack', KeyL: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash', KeyC: 'dash',
-    KeyI: 'special', KeyV: 'special', KeyH: 'flask', KeyQ: 'flask', KeyE: 'interact', Enter: 'interact',
+    KeyI: 'special', KeyV: 'special', KeyO: 'item2', KeyB: 'item2', KeyH: 'flask', KeyQ: 'flask', KeyE: 'interact', Enter: 'interact',
   };
   addEventListener('keydown', (e) => {
     if (e.repeat) return;
@@ -102,7 +102,7 @@ export function createInput(root) {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const gp of pads) {
       if (!gp) continue;
-      const map = { jump: [0], attack: [2], dash: [1, 5, 7], special: [3], flask: [4, 6], interact: [] };
+      const map = { jump: [0], attack: [2], dash: [1, 5, 7], special: [3], item2: [6], flask: [4], interact: [] };
       const out = { x: Math.abs(gp.axes[0]) > 0.2 ? gp.axes[0] : 0, y: Math.abs(gp.axes[1]) > 0.3 ? -gp.axes[1] : 0 };
       if (gp.buttons[14]?.pressed) out.x = -1;
       if (gp.buttons[15]?.pressed) out.x = 1;

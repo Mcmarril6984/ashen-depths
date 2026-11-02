@@ -22,7 +22,7 @@ const list = ['iPhone SE', 'iPhone 15', 'iPhone 15 Pro Max', 'Galaxy S8', 'Galax
     await p.tap('#startbtn'); await p.waitForTimeout(3000);
     const r = await p.evaluate(() => {
       const W = innerWidth, H = innerHeight;
-      const sel = ['#hp', '#flask', '#loadout', '#minimap', '#pausebtn', '#depth', '#gold', '#tip', '#b-attack', '#b-jump', '#b-dash', '#b-special', '#b-flask'];
+      const sel = ['#hp', '#flask', '#loadout', '#minimap', '#pausebtn', '#depth', '#gold', '#tip', '#b-attack', '#b-jump', '#b-dash', '#b-special', '#b-item2', '#b-flask'];
       const boxes = sel.map((s) => [s, document.querySelector(s)]).filter(([, e]) => e && e.offsetParent !== null && !e.classList.contains('hidden')).map(([s, e]) => [s, e.getBoundingClientRect()]);
       const issues = [];
       for (const [s, q] of boxes) if (q.left < -1 || q.top < -1 || q.right > W + 1 || q.bottom > H + 1) issues.push('offscreen ' + s);

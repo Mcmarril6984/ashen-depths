@@ -1,5 +1,6 @@
 import { ENEMY_TYPES } from '../enemies.js';
 import { WEAPONS } from '../upgrades.js';
+import { ITEM_DEFS } from '../items.js';
 import { T } from '../constants.js';
 import { makeRng } from '../rng.js';
 import { CHUNKS } from './chunks.js';
@@ -25,7 +26,7 @@ function roster(pool,count,budget,rng) {
  for(let n=count;n>0;n--){const t=rng.pick(pool.filter(t=>sums[n-1].has(remaining-ENEMY_TYPES[t].hp)));out.push(t);remaining-=ENEMY_TYPES[t].hp;}
  return out;
 }
-export function generateFloor({seed,depth,allowedWeapons,enemyCountMul=1}) {
+export function generateFloor({seed,depth,allowedWeapons,allowedItems,enemyCountMul=1}) {
  depth=Math.max(1,Math.min(20,Math.floor(depth)||1));
  const rng=makeRng(seed),[archetype,floorName,style]=FLOORS[depth-1],biome=['halls','forge','crypt','hell'][Math.floor((depth-1)/5)];
  const boss=depth%5===0,n=boss?1:6, rw=style==='wide'?32:style==='narrow'?20:26;
@@ -90,6 +91,8 @@ export function generateFloor({seed,depth,allowedWeapons,enemyCountMul=1}) {
     entity('chest',x+12.5,sy+1);entity('merchant',x+8.5,sy+1);
     const weapons=[]; // one weapon per run (3.1): no altars
     if(weapons.length)entity('weapon',x+Math.min(18.5,rw-5.5),sy+1,{id:rng.pick(weapons).id});
+    const items=ITEM_DEFS.filter(a=>!allowedItems||allowedItems.has(a.id));
+    if(items.length)entity('item',x+Math.min(18.5,rw-5.5),sy+1,{id:rng.pick(items).id}); // item altar in the side tomb
    }
    base=end;
   }

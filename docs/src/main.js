@@ -10,7 +10,8 @@ import { updateEvolution, EVOLUTIONS } from './game/weapons.js';
 import { makeRng } from './game/rng.js';
 import { unlockAudio, sfx, toggleMute, isMuted, setCombo } from './audio.js';
 import * as META from './game/meta.js';
-import { normalizeMeta, sanitizeLoadout, allowedBlessings, allowedWeapons, vowMods, recordRun, isUnlocked, UNLOCKS } from './game/meta.js';
+import { normalizeMeta, sanitizeLoadout, allowedBlessings, allowedWeapons, allowedItems, vowMods, recordRun, isUnlocked, UNLOCKS } from './game/meta.js';
+import { itemDef } from './game/items.js';
 import { generateTutorial } from './game/level/tutorial.js';
 import { Tips } from './ui/tips.js';
 import { MapView } from './ui/minimap.js';
@@ -60,6 +61,7 @@ async function boot() {
   view = new View($('#game'));
   view.weaponList = WEAPONS;
   view.blessingIcon = (id) => blessingDef(id)?.icon;
+  view.itemIcon = (id) => itemDef(id)?.icon;
   view.touchUI = matchMedia('(pointer: coarse)').matches;
   addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') view.touchUI = true; });
   input = createInput(document.body);
@@ -67,6 +69,7 @@ async function boot() {
   wireUi();
   hearth = new Hearth($('#hearth'), { getMeta: () => meta, setMeta: (m) => { meta = m; writeSave(); updateTitleMeta(); }, onClose: () => setState(lastMenu), onStart: () => newRun(), sfx });
   hud.weaponName = (id) => WEAPONS.find((w) => w.id === id)?.name || id;
+  hud.itemDef = itemDef;
   tips = new Tips($('#tip'), () => input.touch || matchMedia('(pointer: coarse)').matches);
   mapView = new MapView($('#minimap'), $('#fullmap'));
   applySettings();
@@ -129,7 +132,7 @@ function wireUi() {
   const touch = matchMedia('(pointer: coarse)').matches;
   $('#ctlhelp').innerHTML = touch
     ? '<b>Left thumb</b> move · <b>Right</b> attack, jump, dash · <b>hold attack</b> for a heavy strike<br>Hold up/down while attacking to slash up/down · down-slash bounces off enemies'
-    : '<b>A/D</b> move · <b>Space</b> jump · <b>J</b> attack (hold: heavy) · <b>L/Shift</b> dash · <b>I</b> special · <b>H</b> heal · <b>W/E</b> interact<br>Hold W/S while attacking to slash up/down · down-slash bounces off enemies · gamepad works too';
+    : '<b>A/D</b> move · <b>Space</b> jump · <b>J</b> attack (hold: heavy) · <b>L/Shift</b> dash · <b>I</b>/<b>O</b> items · <b>H</b> heal · <b>W/E</b> interact<br>Hold W/S while attacking to slash up/down · down-slash bounces off enemies · gamepad works too';
   updateTitleMeta();
   if (isStandaloneApp()) $('#fsbtn').classList.add('hidden'); // already running full screen from the home screen
 }
@@ -186,10 +189,11 @@ function newRun(seed) {
   const lo = sanitizeLoadout(meta);
   const mods = vowMods(lo.vows);
   run = { seed: seed ?? (Math.random() * 1e9) | 0, depth: 1, stats: makeStats(), owned: {}, kills: 0, time: 0,
-    vows: lo.vows, mods, killsByType: {}, allowed: { blessings: allowedBlessings(meta), weapons: allowedWeapons(meta) } };
+    vows: lo.vows, mods, killsByType: {}, allowed: { blessings: allowedBlessings(meta), weapons: allowedWeapons(meta), items: allowedItems(meta) } };
   run.rng = makeRng(run.seed ^ 0x5bd1e995);
   equipWeapon(run.stats, lo.weapon);
   run.stats.flaskType = lo.flask;
+  run.stats.items = [lo.item || null, null];
   if (mods.noFlask) run.stats.flaskCharges = 0;
   if (mods.maxHp) run.stats.maxHp = mods.maxHp;
   run.bossesBeaten = [];
@@ -199,7 +203,7 @@ function newRun(seed) {
 }
 
 function startFloor(carry) {
-  world = createWorld({ seed: run.seed, depth: run.depth, stats: run.stats, carry, mods: run.mods, allowedWeapons: run.allowed.weapons });
+  world = createWorld({ seed: run.seed, depth: run.depth, stats: run.stats, carry, mods: run.mods, allowedWeapons: run.allowed.weapons, allowedItems: run.allowed.items });
   world.onShrine = openShrine;
   world.onExit = nextFloor;
   world.onVictory = victory;
@@ -226,6 +230,7 @@ function startTutorial() {
   run = { seed: 7, depth: 1, stats: makeStats(), owned: {}, kills: 0, vows: [], mods: {}, killsByType: {}, bossesBeaten: [], tutorial: true,
     allowed: { blessings: allowedBlessings(meta), weapons: allowedWeapons(meta) } };
   run.rng = makeRng(99);
+  run.stats.items = ['cinder_flask', null]; // the tutorial hands you a flask to try
   world = createWorld({ seed: 7, depth: 1, stats: run.stats, level: generateTutorial() });
   world.onShrine = openShrine; world.onShop = openShop;
   view.buildWorld(world);
@@ -314,9 +319,9 @@ function renderShop(merchant) {
   for (const o of merchant.offers) {
     const c = document.createElement('div');
     const afford = p.gold >= o.price && !o.sold;
-    const rarity = o.kind === 'weapon' ? (WEAPONS.find((x) => x.id === o.id)?.rarity || 'common') : (UPGRADES.find((x) => x.id === o.id)?.rarity || 'common');
+    const rarity = o.kind === 'item' ? (itemDef(o.id)?.rarity || 'common') : o.kind === 'weapon' ? (WEAPONS.find((x) => x.id === o.id)?.rarity || 'common') : (UPGRADES.find((x) => x.id === o.id)?.rarity || 'common');
     c.className = 'card ' + rarity + (afford ? '' : ' poor');
-    const tag = o.kind === 'weapon' ? 'Weapon' : o.kind === 'heal' ? 'Provision' : 'Blessing';
+    const tag = o.kind === 'weapon' ? 'Weapon' : o.kind === 'heal' ? 'Provision' : o.kind === 'item' ? 'Item' : 'Blessing';
     c.innerHTML = `<div class="icon">${o.icon || '✦'}</div><div class="name">${o.name}</div><div class="desc">${o.desc}</div>` +
       `<div class="rar">${tag}</div><div class="price">${o.sold ? 'Sold' : o.price + ' gold'}</div>`;
     c.addEventListener('click', () => {
@@ -324,6 +329,9 @@ function renderShop(merchant) {
       const pay = () => { p.gold -= o.price; o.sold = true; sfx('heal'); hud.banner(tag, o.name, 1200); setState('shop'); renderShop(merchant); };
       if (o.kind === 'heal') { p.hp = Math.min(p.stats.maxHp, p.hp + 3); pay(); }
       else if (o.kind === 'weapon') { equipWeapon(run.stats, o.id); pay(); }
+      else if (o.kind === 'item') { // into an empty slot, else replacing slot 2
+        const items = run.stats.items ||= [null, null], free = items.indexOf(null);
+        items[free < 0 ? 1 : free] = o.id; p.itemCd[free < 0 ? 1 : free] = 0; pay(); }
       else takeBlessing(o.id, pay, () => { setState('shop'); renderShop(merchant); });
     });
     box.appendChild(c);
@@ -515,7 +523,7 @@ function handleBossEvents() {
 
 function idleInput() {
   return { x: 0, y: 0, jump: false, jumpPressed: false, attack: false, attackPressed: false, dash: false, dashPressed: false,
-    special: false, specialPressed: false, flask: false, flaskPressed: false, interact: false, interactPressed: false, upPressed: false };
+    special: false, specialPressed: false, item2: false, item2Pressed: false, flask: false, flaskPressed: false, interact: false, interactPressed: false, upPressed: false };
 }
 
 // ---------------- pause menu: map / blessings / settings / run ----------------

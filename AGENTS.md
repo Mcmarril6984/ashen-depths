@@ -216,3 +216,13 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    every model/texture download; index.html pre-fetches all code files listed in `<code folder>/modules.txt` (written
    by publish.sh) with retries before `import()`ing main.js. Local dev has no modules.txt and just imports.
    Tested with every file failing its first request: the game still starts.
+8. **Items (done, first 8).** `docs/src/game/items.js`: `ITEM_DEFS` (Cinder Flask, Frost Shard, Ember Turret, Spike
+   Snare, Ashen Cloak, War Cry, Bronze Buckler, Hand Crossbow), `useItem`, `itemImpact`, `blocks` (buckler block/parry
+   in `damagePlayer`), `tickItems` (cooldowns, turrets, snares, burning pools, cloak). Two slots `stats.items`,
+   cooldowns `pl.itemCd`; buttons: special = slot 1 (#b-special, keys I/V, pad Y), item2 = slot 2 (#b-item2, keys
+   O/B, pad LT). Item hits pass `{ item: true }` (weapon on-hit rules skip them; blessings still react).
+   Found on item altars in each floor's side tomb (reuses `weaponDrops` with `item: true`; full slots swap slot 2,
+   old item stays on the altar) and at the trader. Hearth: Items tab, starting item in Loadout (free: Cinder Flask,
+   Hand Crossbow). Cloaked players are invisible to grunts (`cloakView`). Old special/firebolt code is unused.
+   Next items from the brainstorm: Bone Bola, Plague Jar, Chain Javelin, Brazier, Bell of Wards, Blood Rite,
+   Grave Pull, Spirit Lantern; a "which slot?" choice when both are full.

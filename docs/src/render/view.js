@@ -40,7 +40,8 @@ const ENEMY_LOOK = {
 };
 // Animation used for each logical enemy anim (name, speed)
 const PROJ_COLOR = { fireball: 0xff5a2a, wave: 0x9ad8ff, firebolt: 0xffb040, orb: 0xb46aff, bolt: 0x6ae8ff, windblade: 0xe0f4ff,
-  arrow: 0xd8f0ff, crescent: 0xb48aff, hook: 0xc8c0b0, flamewave: 0xff7a2a, spirit: 0x9ae8ff, ember: 0xff8a3a, darkslash: 0x6a3aaa };
+  arrow: 0xd8f0ff, crescent: 0xb48aff, hook: 0xc8c0b0, flamewave: 0xff7a2a, spirit: 0x9ae8ff, ember: 0xff8a3a, darkslash: 0x6a3aaa,
+  flask: 0xff7a2a, shard: 0xbfe8ff, xbolt: 0xf0e0c0 };
 const ENEMY_ANIM = {
   idle: ['idle_menace', 1], walk: ['walk', 1.1], run: ['run', 1], windup: ['heavy1', 0.45], attack: ['attack1', 1.9],
   attack2: ['attack2', 1.9], throw: ['attack3', 2], hurt: ['hurt', 1.6], death: ['death', 1.1], block: ['block', 1],
@@ -786,6 +787,14 @@ export class View {
     const dg = p.state === 'dash' ? 1 : 0; // faint violet tint while dashing (invulnerable)
     ch.mat.emissive.setRGB(0.06 * dg, 0.04 * dg, 0.14 * dg);
     if (p.state === 'flask') ch.mat.emissive.setRGB(0.15, 0.4, 0.3);
+    // Ashen Cloak: the hero fades to a faint shimmer
+    const cloaked = p.cloakT > 0;
+    if (ch.mat.transparent !== cloaked) { ch.mat.transparent = cloaked; ch.mat.needsUpdate = true; }
+    ch.mat.opacity = cloaked ? 0.22 + Math.sin(world.time * 12) * 0.05 : 1;
+    // Bronze Buckler raised: a bronze disc in front of the hero
+    pv.buckler ||= (() => { const s = this.sprite(0xd8a050, 1.5, 0); this.levelGroup.add(s); return s; })();
+    pv.buckler.position.set(p.x + p.facing * 0.55, p.y + 1.05, 0.6);
+    pv.buckler.material.opacity = p.state === 'block' ? 0.75 : 0;
     if (p.rageT > 0) { ch.mat.emissive.setRGB(0.35, 0.08, 0.02); if (Math.random() < 0.4) this.particles.emit(p.x, p.y + Math.random() * 1.6, 0.4, 1, 0xff6a2a, { speed: 0.5, up: 2, life: 0.4, size: 0.25 }); }
     pv.trail.update(ch.sword, (p.state === 'attack' && p.stateTime < 0.3 / p.stats.attackSpeed) || (p.state === 'heavy' && p.stateTime < 0.35), dt);
     if (p.state === 'dash') for (let i = 0; i < 3; i++) this.particles.emit(p.x - p.facing * 0.3, p.y + 0.2 + Math.random() * 1.5, 0, 1, 0xb8a8ff, { speed: 0.4, life: 0.22, size: 0.45, dir: -p.facing * 0.3 });
@@ -884,6 +893,8 @@ export class View {
       }
       v.position.set(pr.x, pr.y - (pr.kind === 'bone' ? 0.15 : 0), 0.3);
       if (pr.kind === 'bone' || pr.kind === 'blade') { v.rotation.z += dt * (pr.kind === 'blade' ? 22 : 14); if (pr.kind === 'blade' && Math.random() < 0.6) this.particles.emit(pr.x, pr.y, 0.3, 1, 0xfff0d0, { speed: 0.5, life: 0.25, size: 0.3 }); }
+      else if (pr.kind === 'xbolt') { v.material.rotation = Math.atan2(pr.vy, pr.vx); v.scale.set(1.5, 0.28, 1); }
+      else if (pr.kind === 'flask' || pr.kind === 'shard') { if (Math.random() < 0.7) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.kind === 'flask' ? 0xff8a3a : 0xd8f4ff, { speed: 0.4, life: 0.3, size: 0.24 }); }
       else if (pr.kind === 'arrow') { // stretched streak aimed along its flight
         v.material.rotation = Math.atan2(pr.vy, pr.vx); v.scale.set(pr.big ? 2.6 : 1.8, pr.big ? 0.5 : 0.32, 1);
         if (Math.random() < (pr.spectral ? 0.9 : 0.5)) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.spectral ? 0x9ae8ff : 0xe8f4ff, { speed: 0.3, life: 0.2, size: 0.22 }); }
@@ -1150,6 +1161,16 @@ export class View {
   // Merchant, weapon altars, hearts, souls, dash trails, special projectiles
   updateItems(world, dt) {
     const P = this.particles;
+    this.itemViews ||= new Map();
+    const live = new Set([...(world.turrets || []), ...(world.snares || [])]);
+    for (const t of live) {
+      let v = this.itemViews.get(t);
+      if (!v) { v = this.emojiSprite(world.turrets?.includes(t) ? '🗼' : '🪤', world.turrets?.includes(t) ? 1.1 : 0.7); this.levelGroup.add(v); this.itemViews.set(t, v); }
+      v.position.set(t.x, t.y + (world.turrets?.includes(t) ? 0.55 : 0.3), 0.4);
+      if (world.turrets?.includes(t) && Math.random() < 0.3) P.emit(t.x, t.y + 1.1, 0.2, 1, 0xff8a3a, { speed: 0.4, up: 1, life: 0.4, size: 0.2 });
+    }
+    for (const [t, v] of this.itemViews) if (!live.has(t)) { this.levelGroup.remove(v); this.itemViews.delete(t); }
+    for (const pool of world.pools || []) if (Math.random() < 0.8) P.emit(pool.x + (Math.random() - 0.5) * 2.6, pool.y + 0.1, 0.1, 1, 0xff6a1a, { speed: 0.3, up: 1.6, life: 0.5, size: 0.35 });
     for (const c of world.clouds || []) if (Math.random() < 0.7) P.emit(c.x + (Math.random() - 0.5) * 3, c.y + Math.random() * 1.5, 0.2, 1, 0x6ad83a, { speed: 0.3, up: 0.3, life: 0.9, size: 0.6 });
     for (const a of world.allies || []) { // spectral fighters: a shimmering silhouette of light
       for (let i = 0; i < 3; i++) P.emit(a.x + (Math.random() - 0.5) * 0.7, a.y + Math.random() * 1.9, 0.05, 1, a.kind === 'hollow' ? 0xc8a0ff : a.kind === 'shade' ? 0xff3a3a : 0x9ae8ff, { speed: 0.3, up: 0.6, life: 0.35, size: 0.32 });
@@ -1187,7 +1208,8 @@ export class View {
       if (!dv || dv.id !== d.id) {
         if (dv) this.levelGroup.remove(dv.holder);
         const holder = new THREE.Group();
-        this.placePiece(this.weaponPiece(d.id), 0, 0, 0, { h: 1.2, group: holder });
+        if (d.item) { const ic = this.emojiSprite(this.itemIcon?.(d.id) || '✦', 1); ic.position.y = 0.3; holder.add(ic); }
+        else this.placePiece(this.weaponPiece(d.id), 0, 0, 0, { h: 1.2, group: holder });
         const glow = this.sprite(0xffd27a, 2.4, 0.5); glow.position.y = 0.6; holder.add(glow);
         this.levelGroup.add(holder);
         dv = { holder, id: d.id }; this.dropViews.set(d, dv);
@@ -1313,6 +1335,10 @@ export class View {
         case 'fragment': P.emit(ev.x, ev.y, 0.3, 14, 0x6aff9a, { speed: 2, up: 2, life: 0.8, size: 0.3 }); break;
         case 'debt': P.emit(ev.x, ev.y + 1, 0.4, 20, 0x8a0a0a, { speed: 3, life: 0.6, size: 0.3, gravity: 8 }); break;
         case 'relicdrop': this.fx.ring(ev.x, ev.y + 0.6, 1.4, 0xffd27a); break;
+        case 'deploy': this.fx.ring(ev.x, ev.y + 0.3, 1, ev.kind === 'turret' ? 0xff9a3a : 0xc8b8a0); break;
+        case 'snare': this.fx.impact(ev.x, ev.y + 0.4, 2, 0xd0c0a0); P.emit(ev.x, ev.y + 0.3, 0.3, 18, 0xa01818, { speed: 4, up: 2, life: 0.5, size: 0.25, gravity: 10 }); break;
+        case 'cloak': P.emit(ev.x, ev.y + 1, 0.5, 30, 0x9a9aaa, { speed: 2, up: 1, life: 0.8, size: 0.5 }); break;
+        case 'itemUse': break;
         case 'counter': this.fx.impact(ev.x, ev.y, 2.8, 0xfff4c0); P.emit(ev.x, ev.y, 0.4, 20, 0xfff0a0, { speed: 6, life: 0.35, size: 0.28 }); break;
         case 'soulspend': this.fx.ring(ev.x, ev.y, 2, 0xb48aff); P.emit(ev.x, ev.y, 0.5, 30, 0xc8a0ff, { speed: 5, up: 2, life: 0.6, size: 0.3 }); break;
         case 'hooked': for (let i = 0; i <= 10; i++) P.emit(ev.px + (ev.x - ev.px) * i / 10, ev.py + (ev.y - ev.py) * i / 10, 0.05, 1, 0xd0c8b8, { speed: 0.3, life: 0.25, size: 0.18 }); this.fx.impact(ev.x, ev.y, 1.6, 0xe8e0d0); break;
