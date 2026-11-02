@@ -1,7 +1,10 @@
 import { UPGRADES, WEAPONS } from './upgrades.js';
+import { STARTER_WEAPON } from './weapons.js';
 
 export const BASE_BLESSINGS = ['serrated_edge','kindled_blade','ember_trail','pogo_storm','soul_harvest','executioner','deflect','bloodlust','feather_step','firebolt'];
-export const BASE_WEAPONS = ['sword'];
+export const BASE_WEAPONS = [STARTER_WEAPON];
+// Unlocks retired by the 3.1 rework: owners get the Ember back once, the next time the save loads.
+const RETIRED = { dagger: 25, axe: 35, mace: 45, greatsword: 60, hammer: 70, loadout: 30 };
 const catalog = (cat, source, rows) => rows.map(([id,cost,requires]) => {
   const {name,desc,icon}=source.find(item=>item.id===id);
   return {id,cat,name,desc,icon,cost,target:id,...(requires?{requires}:{} )};
@@ -11,9 +14,8 @@ export const startDepth=biome=>({halls:1,forge:6,crypt:11,hell:16}[biome]||1);
 export const UNLOCKS = [
   ...[['forge','dwarf_king','The Forge'],['crypt','forge_golem','The Sunken Crypt'],['hell','bone_lord','The Hell Gate']].map(([biome,boss,name])=>({id:'start_'+biome,cat:'start',name,desc:'Begin your descent at '+name,icon:'🔥',cost:0,condition:{boss}})),
   ...catalog('blessing',UPGRADES,[['cinder_blood',40],['storm_brand',55],['slipstream',30],['aerial_fuse',50],['blood_echo',35],['thunder_clap',60],['storm_crown',35],['riposte',60],['phantom_dash',35],['boomerang_blade',40],['warding_sigil',40],['phoenix_ember',80],['last_stand',40],['wind_blades',45],['juggler',35],['shadow_step',60,['phantom_dash']],['flask_nova',25],['shockwave',30]]),
-  ...catalog('weapon',WEAPONS,[['dagger',25],['axe',35],['mace',45],['greatsword',60,['axe']],['hammer',70,['mace']]]),
+  ...catalog('weapon',WEAPONS,[['bloodletter',30],['ashen_fists',35],['mourning_reaper',50],['gravehook',55],['oathbreaker',60],['hollowpoint',75],['wraithstring',80]]),
   ...[
-    ['loadout','feature','Armory Rack',30,"Choose your starting weapon from those you've unlocked",'⚔️'],
     ['shrine_reroll','feature','Shrine Candle',40,"Reroll a shrine's blessings once",'🕯️'],
     ['merchant_reroll','feature','Haggling',40,"Reroll a merchant's wares once per floor",'🪙'],
     ['rage_flask','flask','Rage Draught',45,'Heals 1; for 5 s your hits explode','🔥'],
@@ -27,7 +29,7 @@ export const UNLOCKS = [
   ].map(([id,name,desc,emberBonus,icon])=>({id,cat:'vow',name,desc,emberBonus,icon,cost:0,condition:{best:3}})),
 ];
 export function defaultMeta() {
-  return {v:1,ember:0,unlocked:{},best:1,runs:0,wins:0,kills:0,bestiary:{},bosses:Object.fromEntries(BOSS_IDS.map(id=>[id,false])),loadout:{weapon:'sword',flask:'heal',vows:[],startBiome:'halls'}};
+  return {v:1,ember:0,unlocked:{},best:1,runs:0,wins:0,kills:0,bestiary:{},bosses:Object.fromEntries(BOSS_IDS.map(id=>[id,false])),loadout:{weapon:STARTER_WEAPON,flask:'heal',vows:[],startBiome:'halls'}};
 }
 const count=(n,fallback=0)=>typeof n==='number'&&Number.isFinite(n)?Math.max(fallback,Math.floor(n)):fallback;
 const object=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
@@ -37,6 +39,7 @@ export function normalizeMeta(obj) {
     if(!object(obj))return m;
     for(const key of ['ember','best','runs','wins','kills'])m[key]=count(obj[key],key==='best'?1:0);
     if(object(obj.unlocked))for(const u of UNLOCKS)if(u.cat!=='vow'&&obj.unlocked[u.id]===true)m.unlocked[u.id]=true;
+    if(object(obj.unlocked))for(const [id,cost] of Object.entries(RETIRED))if(obj.unlocked[id]===true)m.ember+=cost;
     if(object(obj.bestiary))for(const [key,value] of Object.entries(obj.bestiary))if(!['__proto__','constructor','prototype'].includes(key))m.bestiary[key]=count(value);
     if(object(obj.bosses))for(const id of BOSS_IDS)m.bosses[id]=obj.bosses[id]===true;
     if(object(obj.loadout))m.loadout={...obj.loadout};
@@ -84,5 +87,5 @@ export function recordRun(meta,run={},vows) {
 }
 export function sanitizeLoadout(meta) {
   const l=meta?.loadout||{};
-  return {weapon:isUnlocked(meta,'loadout')&&allowedWeapons(meta).has(l.weapon)?l.weapon:'sword',flask:['rage_flask','ward_flask'].includes(l.flask)&&isUnlocked(meta,l.flask)?l.flask:'heal',vows:[...new Set(Array.isArray(l.vows)?l.vows:[])].filter(id=>UNLOCKS.some(u=>u.id===id&&u.cat==='vow')&&isUnlocked(meta,id)),startBiome:['forge','crypt','hell'].includes(l.startBiome)&&isUnlocked(meta,'start_'+l.startBiome)?l.startBiome:'halls'};
+  return {weapon:allowedWeapons(meta).has(l.weapon)?l.weapon:STARTER_WEAPON,flask:['rage_flask','ward_flask'].includes(l.flask)&&isUnlocked(meta,l.flask)?l.flask:'heal',vows:[...new Set(Array.isArray(l.vows)?l.vows:[])].filter(id=>UNLOCKS.some(u=>u.id===id&&u.cat==='vow')&&isUnlocked(meta,id)),startBiome:['forge','crypt','hell'].includes(l.startBiome)&&isUnlocked(meta,'start_'+l.startBiome)?l.startBiome:'halls'};
 }

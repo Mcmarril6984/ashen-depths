@@ -110,6 +110,8 @@ export async function loadAssets(onProgress = () => {}) {
     assets.pieces[id] = g;
   });
 
+  buildWeaponPieces();
+
   CHAR_IDS.forEach((id, i) => {
     const scene = chars[i].scene;
     scene.traverse((o) => {
@@ -309,4 +311,35 @@ export function attachInModelSpace(ch, boneName, pieceId, { pos = [0, 0, 0], sca
   bone.add(pivot);
   ch.root.position.copy(savedPos); ch.root.rotation.copy(savedRot); ch.root.scale.copy(savedScale);
   return mesh; // rotate this (character-space axes) to flap
+}
+
+// Weapons the kit doesn't have (scythe, sickle, bow, rapier, gauntlet), built from primitives in the kit's
+// sword space: grip at the origin, blade up +Y, flat in the YZ plane. Colours come from texels of the sword.
+function buildWeaponPieces() {
+  const sw = assets.pieces.sword; if (!sw) return;
+  const pos = sw.attributes.position, uv = sw.attributes.uv;
+  let hi = 0, lo = 0;
+  for (let i = 0; i < pos.count; i++) { if (pos.getY(i) > pos.getY(hi)) hi = i; if (pos.getY(i) < pos.getY(lo)) lo = i; }
+  const steel = [uv.getX(hi), uv.getY(hi)], grip = [uv.getX(lo), uv.getY(lo)];
+  const paint = (g, t) => { g = g.index ? g.toNonIndexed() : g; const a = new Float32Array(g.attributes.position.count * 2); for (let i = 0; i < a.length; i += 2) { a[i] = t[0]; a[i + 1] = t[1]; } g.setAttribute('uv', new THREE.BufferAttribute(a, 2)); g.deleteAttribute('normal'); g.computeVertexNormals(); return g; };
+  const merge = (parts) => { // tiny merge: positions + uvs + normals of non-indexed parts
+    const n = parts.reduce((s, g) => s + g.attributes.position.count, 0), P = new Float32Array(n * 3), U = new Float32Array(n * 2), N = new Float32Array(n * 3);
+    let o = 0; for (const g of parts) { P.set(g.attributes.position.array, o * 3); U.set(g.attributes.uv.array, o * 2); N.set(g.attributes.normal.array, o * 3); o += g.attributes.position.count; }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.BufferAttribute(U, 2)); g.setAttribute('normal', new THREE.BufferAttribute(N, 3)); g.computeBoundingBox(); return g;
+  };
+  const cyl = (r, y0, y1, t, seg = 6) => paint(new THREE.CylinderGeometry(r, r, y1 - y0, seg).translate(0, (y0 + y1) / 2, 0), t);
+  // crescent blade in the YZ plane: outer arc minus inner arc, extruded thin along X
+  const crescent = (R, thick, a0, a1, cx, cy, t) => {
+    const sh = new THREE.Shape(), steps = 14;
+    for (let i = 0; i <= steps; i++) { const a = a0 + (a1 - a0) * i / steps; const p = [cx + Math.cos(a) * R, cy + Math.sin(a) * R]; i ? sh.lineTo(...p) : sh.moveTo(...p); }
+    for (let i = steps; i >= 0; i--) { const a = a0 + (a1 - a0) * i / steps, r = R - thick * Math.sin(Math.PI * i / steps); sh.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+    return paint(new THREE.ExtrudeGeometry(sh, { depth: 0.02, bevelEnabled: false }).translate(0, 0, -0.01).rotateY(Math.PI / 2), t);
+  };
+  assets.pieces.scythe = merge([cyl(0.025, -0.45, 1.25, grip), crescent(0.62, 0.16, Math.PI * 0.5, Math.PI * 1.05, 0, 0.62, steel)]);
+  assets.pieces.sickle = merge([cyl(0.022, -0.12, 0.28, grip), crescent(0.3, 0.09, Math.PI * 0.35, Math.PI * 1.2, 0, 0.2, steel)]);
+  assets.pieces.rapier = merge([cyl(0.022, -0.16, 0.0, grip), paint(new THREE.TorusGeometry(0.07, 0.012, 4, 10).rotateY(Math.PI / 2), steel), paint(new THREE.ConeGeometry(0.018, 1.05, 4).translate(0, 0.53, 0), steel)]);
+  assets.pieces.bow = merge([paint(new THREE.TorusGeometry(0.62, 0.028, 5, 18, Math.PI * 0.8).rotateZ(Math.PI * 0.1).rotateY(Math.PI / 2).translate(0, 0, 0.52), grip),
+    cyl(0.006, -0.36, 0.36, steel, 3), cyl(0.03, -0.08, 0.08, grip)]);
+  assets.pieces.gauntlet = merge([paint(new THREE.DodecahedronGeometry(0.11, 0).scale(1, 1.2, 1.1).translate(0, 0.05, 0), steel), cyl(0.07, -0.18, -0.02, grip)]);
+  for (const k of ['scythe', 'sickle', 'rapier', 'bow', 'gauntlet']) assets.pieces[k].computeBoundingBox();
 }

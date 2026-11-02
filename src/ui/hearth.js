@@ -82,14 +82,14 @@ export class Hearth {
       brow.appendChild(b);
     }
     // starting weapon
-    const canPick = isUnlocked(meta, 'loadout');
-    const wrow = section('Starting weapon', canPick ? '' : 'Unlock the Armory Rack (Features) to choose.');
+    const canPick = true; // one weapon per run (3.1): choose any weapon you own
+    const wrow = section('Weapon', 'You carry one weapon for the whole run. Buy more under Weapons.');
     const allowed = allowedWeapons(meta);
     for (const wp of WEAPONS) {
       if (!allowed.has(wp.id)) continue;
       const b = document.createElement('button');
-      b.className = 'pick' + (lo.weapon === wp.id ? ' on' : '') + (canPick || wp.id === 'sword' ? '' : ' off');
-      b.innerHTML = `<span>${wp.icon || '⚔'}</span>${wp.name}`;
+      b.className = 'pick' + (lo.weapon === wp.id ? ' on' : '') + '';
+      b.innerHTML = `<span>${wp.icon || '⚔'}</span>${wp.name}<small>${wp.kind || ''}</small>`;
       b.addEventListener('click', () => { if (canPick) set({ weapon: wp.id }); else this.sfx('block'); });
       wrow.appendChild(b);
     }

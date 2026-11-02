@@ -4,10 +4,9 @@ import * as UP from './upgrades.js';
 import { overlaps, tileAt, isSolid } from './physics.js';
 import { T } from './constants.js';
 
-const DEFAULT_WEAPON = { id: 'sword', name: 'Sword', piece: 'sword', dmgMul: 1, speedMul: 1, reach: 1, knock: 1, special: null };
-export function weaponOf(stats) {
-  return (UP.WEAPONS || []).find((w) => w.id === stats.weapon) || DEFAULT_WEAPON;
-}
+import * as W from './weapons.js';
+export function weaponOf(stats) { return W.weaponDef(stats.weapon); }
+export const weaponSwing = W.weaponSwing, weaponHeavy = W.weaponHeavy;
 
 const ev = (w, o) => w.events.push(o);
 const near = (w, x, y, r, skip) => w.enemies.filter((e) => e.alive && e !== skip && Math.hypot(e.x - x, e.y + e.h / 2 - y) < r);
@@ -17,11 +16,13 @@ function pproj(w, o) {
 }
 
 // ---- damage shaping -----------------------------------------------------------------------------
-export function shapeDamage(w, e, base, { fromPlayer = true } = {}) {
+export function shapeDamage(w, e, base, { fromPlayer = true, ...opts } = {}) {
   const pl = w.player, st = pl.stats;
   let dmg = base, crit = false, execute = false;
   if (fromPlayer) {
-    crit = w.rng.next() < (st.critChance || 0) || (st.lastStand && pl.hp === 1) || pl.nextCrit;
+    const wd = W.weaponDamage(w, e, opts);
+    dmg *= wd.mul * (opts.mul || 1);
+    crit = opts.crit || w.rng.next() < (st.critChance || 0) + wd.crit || (st.lastStand && pl.hp === 1) || pl.nextCrit;
     pl.nextCrit = false;
     if (e.marked) { dmg *= 2; e.marked = false; ev(w, { t: 'markpop', x: e.x, y: e.y + e.h }); }
     if (st.execute && e.executable && !e.boss) { dmg = Math.max(dmg, e.hp); execute = true; }
@@ -31,12 +32,14 @@ export function shapeDamage(w, e, base, { fromPlayer = true } = {}) {
 }
 
 // ---- on hit / kill --------------------------------------------------------------------------------
-export function onHit(w, e, r, { finisher, vertical, fromPlayer, src }) {
+export function onHit(w, e, r, o) {
+  const { finisher, vertical, fromPlayer } = o;
+  if ((fromPlayer || o.weaponHit) && !o.spectral) W.onWeaponHit(w, e, r, { ...o, addBleed: (t) => addBleed(w, t) });
   if (!fromPlayer || r.blocked) return;
   const pl = w.player, st = pl.stats, wp = weaponOf(st);
   // bleed: from Serrated Edge or the Cleaver Axe; 3 stacks burst
   const hadBleed = (e.bleed || 0) > 0;
-  if (st.bleedBurst || wp.special === 'bleed') addBleed(w, e);
+  if (st.bleedBurst) addBleed(w, e);
   // Blood Echo: a finisher on a bleeding foe spreads one stack to everyone close by (no recursion)
   if (st.bloodEcho && finisher && hadBleed && !w._echoThisSwing) {
     w._echoThisSwing = true;
@@ -58,7 +61,6 @@ export function onHit(w, e, r, { finisher, vertical, fromPlayer, src }) {
     if (w.stormCount % st.stormEvery === 0) lightning(w, e);
   }
   if (st.juggle && vertical === 1 && e.alive && !e.boss && !e.armored && e.type !== 'crystal_turret') { e.vy = 13; e.juggleT = 0.8; }
-  if (finisher && wp.special === 'stun' && e.alive && !e.boss) { e.stunT = 1.2; ev(w, { t: 'stun', e }); }
 }
 
 function addBleed(w, e) {
@@ -96,6 +98,7 @@ function lightning(w, from) {
 
 export function onKill(w, e) {
   const pl = w.player, st = pl.stats;
+  W.onWeaponKill(w, e);
   if (e.burnT > 0) { // burning foes explode, which can ignite and kill the next one
     ev(w, { t: 'explode', x: e.x, y: e.y + e.h * 0.5, r: 2.2, friendly: true });
     w.shake(0.35); w.sfx('slam');
@@ -108,6 +111,7 @@ export function onKill(w, e) {
 // ---- per-frame ------------------------------------------------------------------------------------
 export function tick(w, dt) {
   const pl = w.player, st = pl.stats;
+  W.weaponTick(w, dt);
   for (const e of w.enemies) {
     if (!e.alive) continue;
     if (e.burnT > 0) {
@@ -153,11 +157,6 @@ export function onSwing(w, pl, { finisher, extra }) {
   const st = pl.stats, wp = weaponOf(st);
   const dmg = Math.max(1, Math.round(st.dmg * wp.dmgMul));
   if (finisher && !extra) {
-    if (wp.special === 'flurry') { w.flurry.push({ t: 0.09 }, { t: 0.18 }, { t: 0.27 }); }
-    if (wp.special === 'quake') {
-      for (const dir of [-1, 1]) pproj(w, { kind: 'wave', x: pl.x + dir * 0.8, y: pl.y + 0.5, vx: dir * 12, vy: 0, r: 0.6, dmg: dmg + 1, ttl: 0.6, ground: true });
-      w.shake(0.5); w.sfx('slam');
-    }
     if (st.bladeReturn) {
       pproj(w, { kind: 'blade', piece: wp.piece, x: pl.x + pl.facing, y: pl.y + 1.1, vx: pl.facing * 17, vy: 0, r: 0.6, dmg, ttl: 2.2, boomerang: true, out: 0.35 });
       w.sfx('swing');
@@ -178,6 +177,7 @@ export function reflect(w, pr) {
 export function onDashStart(w, pl) {
   const st = pl.stats;
   pl.dashMarked = new Set();
+  W.onWeaponDash(w, pl);
   if (st.slipstream && !pl.onGround) pl.slipArmed = true;
   if (!st.shadowStep) return;
   const dir = pl.facing;
@@ -195,6 +195,7 @@ export function onDashStart(w, pl) {
 
 export function dashTick(w, pl) {
   const st = pl.stats;
+  W.weaponDashTick(w, pl, overlaps);
   if (st.dashDamage) w.dashDamage(pl);
   if (st.phantomDash) for (const e of w.enemies) if (e.alive && !pl.dashMarked.has(e) && overlaps(pl, e)) { pl.dashMarked.add(e); e.marked = true; ev(w, { t: 'mark', e }); }
   if (st.dashTrail && pl.onGround !== undefined) {
@@ -265,3 +266,5 @@ export function tryRevive(w) {
 }
 
 export { tileAt, T };
+
+export function onPerfectDodge(w, pl, src) { W.onWeaponPerfectDodge(w, pl, src); }
