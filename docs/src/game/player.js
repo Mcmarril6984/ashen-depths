@@ -37,12 +37,14 @@ export function updatePlayer(p, input, dt, world) {
 
   if (input.jumpPressed) p.jumpBuffer = P.jumpBuffer; else p.jumpBuffer = Math.max(0, p.jumpBuffer - dt);
   const moveX = Math.abs(input.x) > 0.25 ? Math.sign(input.x) * Math.min(1, Math.abs(input.x) * 1.3) : 0;
-  const speed = st.moveSpeed > 3 ? st.moveSpeed : P.runSpeed * st.moveSpeed; // stats store m/s
+  const speed = (st.moveSpeed > 3 ? st.moveSpeed : P.runSpeed * st.moveSpeed) * (p.speedMul || 1); // stats store m/s
+  p.jumpHeld = input.jump;
 
   // --- state transitions from input -------------------------------------------------------------
   const canAct = p.state === 'move' || (p.state === 'attack' && p.swingDone);
   if (input.dashPressed && p.dashLeft > 0 && p.dashCd <= 0 && (p.state === 'move' || p.state === 'attack' || p.state === 'charge')) {
-    p.dashLeft--; p.dashCd = p.dashLeft > 0 ? 0.12 : P.dashCooldown;
+    p.dashLeft--; p.dashCd = p.dashLeft > 0 ? 0.12 : P.dashCooldown * (st.dashCdMul || 1);
+    p.dashDur = P.dashTime * (p.dashBoost ? 1.6 : 1); p.dashBoost = false;
     p.dashDir = moveX || p.facing; p.facing = p.dashDir;
     p.invuln = Math.max(p.invuln, P.dashTime + 0.05);
     p.dashHit = new Set(); p.perfectThisDash = false; p.charge = 0;
@@ -56,7 +58,7 @@ export function updatePlayer(p, input, dt, world) {
     world.playerSpecial(p, st.special);
     p.anim = st.special === 'firebolt' ? 'stab' : 'heavy3'; p.animRestart = true;
     setState(p, 'cast');
-  } else if (input.flaskPressed && p.flask > 0 && p.hp < st.maxHp && p.onGround && p.state === 'move') {
+  } else if (input.flaskPressed && p.flask > 0 && p.hp < st.maxHp && p.onGround && p.state === 'move' && (world.canHeal?.() ?? true)) {
     setState(p, 'flask'); world.sfx('flask');
   }
 
@@ -66,7 +68,7 @@ export function updatePlayer(p, input, dt, world) {
     case 'dash': {
       p.vx = p.dashDir * P.dashSpeed; p.vy = 0; gravityMul = 0;
       if (world.dashTick) world.dashTick(p); else if (st.dashDamage) world.dashDamage(p);
-      if (p.stateTime >= P.dashTime) { p.vx = p.dashDir * speed * 0.6; setState(p, 'move'); }
+      if (p.stateTime >= (p.dashDur || P.dashTime)) { p.vx = p.dashDir * speed * 0.6; setState(p, 'move'); }
       break;
     }
     case 'attack': {
@@ -114,7 +116,8 @@ export function updatePlayer(p, input, dt, world) {
     case 'flask':
       p.vx = approach(p.vx, 0, P.groundAccel * dt);
       if (p.stateTime >= P.flaskTime / (st.flaskSpeed || 1)) {
-        p.flask--; p.hp = Math.min(st.maxHp, p.hp + (st.flaskType && st.flaskType !== 'heal' ? 1 : P.flaskHeal));
+        const base = st.flaskType && st.flaskType !== 'heal' ? 1 : P.flaskHeal;
+        p.flask--; p.hp = Math.min(st.maxHp, p.hp + (world.flaskHeal ? world.flaskHeal(base) : base));
         world.healFx(p); world.onFlask?.(p); setState(p, 'move');
       }
       break;
@@ -234,10 +237,11 @@ function approach(v, target, step) {
 }
 
 // Damage from enemies/hazards. Returns true if it landed.
-export function hurtPlayer(p, dmg, dirX, world, { ignoreInvuln = false } = {}) {
+export function hurtPlayer(p, dmg, dirX, world, { ignoreInvuln = false, steadfast = false } = {}) {
   if (p.dead || (p.invuln > 0 && !ignoreInvuln)) return false;
   p.hp -= dmg;
   p.invuln = P.invulnAfterHit;
+  if (steadfast && p.hp > 0) return true; // Undying Will / Unbroken Oath: the blow lands but doesn't interrupt
   p.vx = (dirX || -p.facing) * 9; p.vy = 9;
   if (p.state === 'flask' || p.state === 'attack' || p.state === 'cast' || p.state === 'charge' || p.state === 'heavy') p.queuedAttack = false;
   p.charge = 0; p.chargeFull = false;

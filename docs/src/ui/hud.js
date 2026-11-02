@@ -12,7 +12,7 @@ export class Hud {
 
   update(world, view, inputIsTouch) {
     const p = world.player, L = this.last, el = this.el;
-    const hpKey = p.hp + '/' + p.stats.maxHp;
+    const hpKey = p.hp + '/' + p.stats.maxHp + (p.shield ? 's' : '');
     if (L.hp !== hpKey) {
       const lost = L.hpNum !== undefined && p.hp < L.hpNum;
       el.hp.innerHTML = '';
@@ -21,6 +21,7 @@ export class Hud {
         m.className = 'mask' + (i >= p.hp ? ' empty' : '') + (lost && i >= p.hp && i < L.hpNum ? ' lost' : '');
         el.hp.appendChild(m);
       }
+      if (p.shield) { const s = document.createElement('div'); s.className = 'mask shield'; s.title = 'Shield: blocks one hit'; el.hp.appendChild(s); }
       if (lost) { el.vignette.style.opacity = 1; setTimeout(() => (el.vignette.style.opacity = p.hp <= 1 ? 0.5 : 0), 250); }
       L.hp = hpKey; L.hpNum = p.hp;
     }
@@ -53,6 +54,15 @@ export class Hud {
       el.kprompt.textContent = prompt ? `${prompt} — W / ↑ / E` : '';
       el.kprompt.classList.toggle('hidden', !prompt);
       L.prompt = prompt;
+    }
+    // The Last Flame's danger meter: fills as the flames burn; full costs a mask
+    const danger = p.stats.bless?.the_last_flame ? Math.round(p.b?.danger || 0) : -1;
+    if (L.danger !== danger) {
+      L.danger = danger;
+      el.danger ||= Object.assign(document.createElement('div'), { id: 'danger', innerHTML: '<i></i><span>Danger</span>' });
+      if (!el.danger.parentNode) el.hud.appendChild(el.danger);
+      el.danger.classList.toggle('hidden', danger < 0);
+      el.danger.querySelector('i').style.width = Math.max(0, danger) + '%';
     }
     // charge ring on the attack button while holding for a heavy attack
     const ch = p.state === 'charge' ? Math.round(p.charge * 100) : 0;

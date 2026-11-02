@@ -174,3 +174,22 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    in `assets.js` `buildWeaponPieces`; off-hand pieces via `offhand`.
    Not done yet: evolutions; Bloodletter blood shades etc. come with evolutions. Balance untested beyond smoke tests.
    Next: status effects (poison, chill/freeze), shields, then the 59 blessings, slots + relics, evolutions.
+
+3. **Blessings, slots and relics (done, first pass).** `docs/src/game/blessings.js`: all 59 (`BLESSINGS`, categories
+   offense/movement/defense/cursed/legendary), stat changes that undo cleanly (`addBlessing`/`removeBlessing`, needed
+   for relic swaps), `rollBlessings` (cursed from floor 2, legendary from floor 4, first card favours weapon synergy),
+   and hooks: `damageMul`, `critMul`, `onHit`, `onSwing({hits})`, `onHeavy`, `onKill`, `onDash`, `dashThrough`,
+   `onPerfectDodge`, `incoming` (shields/armour/curses, `roundMasks` = chance-rounding of fractional mask damage),
+   `onHurt`, `steadfast`, `onLethal`, `onRevive`, `onBossBeaten`, `flaskHeal`, `canHeal`, `onBleed`, `onCrit`, `tick`
+   (poison, chill/freeze, slows, clouds, seekers, delayed hits, spectral allies, decoy).
+   Stats: `stats.bless` = owned ids. Old 28 blessings retired (their stat flags still exist in makeStats but nothing
+   grants them; old Hearth unlocks refunded via `RETIRED`). Hearth: 12 free starters (`BASE_BLESSINGS`), 47 for Ember.
+   Slots/relics in `main.js` (`takeBlessing`, `dropBlessing`, `takeRelic`); relic prompt in world.js; relic sprites,
+   allies, clouds, decoy and status glows in view.js; shield mask and Last Flame danger meter in hud.js.
+   Decisions made while building (also in decisions.md): Plaguebearer's heavies are the poison source (nothing
+   else poisons); Featherless Wings grants the second jump it modifies; "elite" = generator elite flag (now
+   ×1.8 HP) or any non-boss with 8+ max HP; spectral allies are drawn as light particles (no model yet).
+   Tested: each blessing alone and all 59 together through scripted combat (no errors); slot picker, relic swap,
+   legendary auto-replace via the real UI.
+   Next: weapon evolutions (spec list), tutorial lessons for heavy attack and perfect dodge, relics on the minimap,
+   proper models for spectral allies, balance passes on a phone.

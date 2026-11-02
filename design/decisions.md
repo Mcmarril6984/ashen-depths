@@ -13,3 +13,8 @@ Owner decisions that refine or override `rework-3.1.md`. Newest last. Agents: ad
 4. **Relics.** A blessing that gets replaced drops on the ground as a small relic instead of disappearing. Standing
    on it and pressing interact ("Swap") puts it back in its slot, and the blessing it displaces drops as a relic in
    turn, so the player can always undo a swap. Relics last until the player leaves the floor and show on the minimap.
+5. **Plaguebearer poisons with heavy attacks.** The spec has no other poison source.
+6. **Featherless Wings grants a second jump** (the game has none by default) and adds the hover to it.
+7. **Elites** are generator elites (now 1.8× health) plus any non-boss with 8+ max health (knights, golems).
+8. **Mask damage rounding:** fractional damage (e.g. 20% less of 1) rounds up with probability equal to the
+   fraction, so percentage effects still matter with whole masks.

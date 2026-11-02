@@ -4,7 +4,8 @@ import { View } from './render/view.js';
 import { createInput } from './ui/input.js';
 import { Hud } from './ui/hud.js';
 import { createWorld, updateWorld } from './game/world.js';
-import { makeStats, rollChoices, applyUpgrade, UPGRADES, WEAPONS, rollShop, equipWeapon } from './game/upgrades.js';
+import { makeStats, rollChoices, applyUpgrade, dropUpgrade, UPGRADES, WEAPONS, rollShop, equipWeapon } from './game/upgrades.js';
+import { slotOf, regularSlots, blessingDef } from './game/blessings.js';
 import { makeRng } from './game/rng.js';
 import { unlockAudio, sfx, toggleMute, isMuted, setCombo } from './audio.js';
 import * as META from './game/meta.js';
@@ -55,6 +56,7 @@ async function boot() {
   }
   view = new View($('#game'));
   view.weaponList = WEAPONS;
+  view.blessingIcon = (id) => blessingDef(id)?.icon;
   view.touchUI = matchMedia('(pointer: coarse)').matches;
   addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') view.touchUI = true; });
   input = createInput(document.body);
@@ -199,6 +201,7 @@ function startFloor(carry) {
   world.onExit = nextFloor;
   world.onVictory = victory;
   world.onShop = openShop;
+  world.onRelic = takeRelic;
   view.buildWorld(world);
   hud.reset();
   mapView.reset(world);
@@ -256,7 +259,7 @@ function nextFloor() {
 function openShrine() {
   setState('choice');
   sfx('shrine');
-  renderShrine(rollChoices(run.rng, run.owned, 3, run.stats, run.allowed));
+  renderShrine(run.shrineChoices = rollChoices(run.rng, run.owned, 3, run.stats, run.allowed, run.depth));
   run.shrineRerolled = false;
   $('#shrinereroll').classList.toggle('hidden', !isUnlocked(meta, 'shrine_reroll'));
   updateRefill();
@@ -266,30 +269,18 @@ function rerollShrine() {
   if (run.shrineRerolled) return;
   run.shrineRerolled = true;
   $('#shrinereroll').classList.add('hidden');
-  renderShrine(rollChoices(run.rng, run.owned, 3, run.stats, run.allowed));
+  renderShrine(run.shrineChoices = rollChoices(run.rng, run.owned, 3, run.stats, run.allowed, run.depth));
 }
 
 function renderShrine(choices) {
   const box = $('#choice .cards');
   box.innerHTML = '';
+  setChoiceHeader('Shrine of embers', 'Choose a blessing');
   for (const u of choices) {
     const c = document.createElement('div');
     c.className = 'card ' + u.rarity;
-    const n = run.owned[u.id] || 0;
-    c.innerHTML = `<div class="icon">${u.icon}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div>` +
-      (n ? `<div class="owned">Owned ×${n}</div>` : '') + `<div class="rar">${u.rarity}</div>`;
-    c.addEventListener('click', () => {
-      const p = world.player;
-      const before = { ...run.stats };
-      applyUpgrade(run.stats, u.id);
-      run.owned[u.id] = n + 1;
-      if (run.stats.flaskCharges > before.flaskCharges) p.flask += run.stats.flaskCharges - before.flaskCharges;
-      if (run.stats.dashes > before.dashes) p.dashLeft = run.stats.dashes;
-      if (run.stats.maxHp > before.maxHp && run.stats.hp === undefined) p.hp += run.stats.maxHp - before.maxHp;
-      sfx('heal');
-      setState('play');
-      hud.banner('Blessing', u.name, 1500);
-    });
+    c.innerHTML = blessingCard(u);
+    c.addEventListener('click', () => takeBlessing(u.id, () => { setState('play'); hud.banner(CAT_NAME[u.cat] || 'Blessing', u.name, 1500); }, () => renderShrine(choices)));
     box.appendChild(c);
   }
 }
@@ -327,15 +318,67 @@ function renderShop(merchant) {
       `<div class="rar">${tag}</div><div class="price">${o.sold ? 'Sold' : o.price + ' gold'}</div>`;
     c.addEventListener('click', () => {
       if (o.sold || p.gold < o.price) { sfx('block'); return; }
-      p.gold -= o.price; o.sold = true;
-      if (o.kind === 'heal') { p.hp = Math.min(p.stats.maxHp, p.hp + 3); }
-      else if (o.kind === 'weapon') { equipWeapon(run.stats, o.id); }
-      else { applyUpgrade(run.stats, o.id); run.owned[o.id] = (run.owned[o.id] || 0) + 1; }
-      sfx('heal'); hud.banner(tag, o.name, 1200);
-      renderShop(merchant);
+      const pay = () => { p.gold -= o.price; o.sold = true; sfx('heal'); hud.banner(tag, o.name, 1200); setState('shop'); renderShop(merchant); };
+      if (o.kind === 'heal') { p.hp = Math.min(p.stats.maxHp, p.hp + 3); pay(); }
+      else if (o.kind === 'weapon') { equipWeapon(run.stats, o.id); pay(); }
+      else takeBlessing(o.id, pay, () => { setState('shop'); renderShop(merchant); });
     });
     box.appendChild(c);
   }
+}
+
+// ---- blessing slots and relics (3.1) ----------------------------------------------------------------
+// 6 regular slots (7 with Fragile Divinity), 1 legendary, 1 cursed. A new legendary/cursed blessing replaces the
+// old one automatically; a new regular one with full slots asks which to drop. Dropped blessings become relics
+// on the floor that can be swapped back in.
+const CAT_NAME = { offense: 'Offensive blessing', movement: 'Movement blessing', defense: 'Defensive blessing', cursed: 'Cursed blessing', legendary: 'Legendary blessing' };
+function blessingCard(u) {
+  return `<div class="icon">${u.icon}</div><div class="name">${u.name}</div><div class="desc">${u.desc}</div><div class="rar">${CAT_NAME[u.cat] || u.rarity}</div>`;
+}
+function setChoiceHeader(tag, title) { $('#choice .tag').textContent = tag; $('#choice h2').textContent = title; }
+function grantBlessing(id) {
+  const p = world.player, before = { ...run.stats };
+  applyUpgrade(run.stats, id); run.owned[id] = 1;
+  if (run.stats.dashes > before.dashes) p.dashLeft = run.stats.dashes;
+  if (run.stats.maxHp > before.maxHp) p.hp += run.stats.maxHp - before.maxHp;
+  p.hp = Math.min(p.hp, run.stats.maxHp);
+  sfx('heal');
+}
+function dropBlessing(id) {
+  const p = world.player;
+  dropUpgrade(run.stats, id); delete run.owned[id];
+  p.hp = Math.min(p.hp, run.stats.maxHp);
+  (world.relics ||= []).push({ x: p.x - p.facing * 1.2, y: p.y, id, t: 0 });
+  world.events.push({ t: 'relicdrop', x: p.x - p.facing * 1.2, y: p.y });
+}
+function takeBlessing(id, onDone, onCancel) {
+  const slot = slotOf(id), owned = Object.keys(run.stats.bless || {});
+  if (slot !== 'regular') {
+    const old = owned.find((o) => slotOf(o) === slot);
+    if (old) { dropBlessing(old); setTimeout(() => hud.banner('Left as a relic', blessingDef(old).name, 1600), 1600); }
+    grantBlessing(id); return onDone();
+  }
+  const regular = owned.filter((o) => slotOf(o) === 'regular');
+  if (regular.length < regularSlots(run.stats)) { grantBlessing(id); return onDone(); }
+  // full: choose one to drop (it becomes a relic you can swap back later)
+  setState('choice');
+  setChoiceHeader('Your blessing slots are full', 'Drop one for ' + blessingDef(id).name + '?');
+  const box = $('#choice .cards'); box.innerHTML = '';
+  for (const o of regular) {
+    const u = blessingDef(o), c = document.createElement('div');
+    c.className = 'card ' + u.rarity; c.innerHTML = blessingCard(u) + '<div class="owned">Drop this</div>';
+    c.addEventListener('click', () => { sfx('select'); dropBlessing(o); grantBlessing(id); onDone(); });
+    box.appendChild(c);
+  }
+  const cancel = document.createElement('div');
+  cancel.className = 'card'; cancel.innerHTML = '<div class="icon">↩</div><div class="name">Keep my blessings</div><div class="desc">Go back without taking it.</div>';
+  cancel.addEventListener('click', () => { sfx('select'); onCancel(); });
+  box.appendChild(cancel);
+}
+function takeRelic(relic) {
+  world.relics = world.relics.filter((r) => r !== relic);
+  takeBlessing(relic.id, () => { setState('play'); hud.banner('Relic', blessingDef(relic.id).name, 1200); },
+    () => { world.relics.push(relic); setState('play'); });
 }
 
 function updateRefill() {
