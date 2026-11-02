@@ -91,8 +91,8 @@ New systems the spec depends on (build these first, in this order):
 5. **Shields** separate from masks (one shield at a time; absorbs one hit), shown in the HUD next to the masks.
 6. **Slots (decided: no replace screen).** 6 regular, 1 legendary, 1 cursed. A new legendary or cursed blessing
    **automatically replaces** the one in its slot (tell the player with a banner: "X replaces Y"). Regular
-   blessings are never removed: once all 6 regular slots are full, stop offering regular blessings (shrines and
-   shops offer legendary, cursed, evolution, flask refill or gold instead).
+   blessings keep being offered when all 6 regular slots are full: taking one asks the player which of their 6 to
+   drop (a quick pick from their current blessings, with a Cancel). The dropped one becomes a relic (below).
    **Relics (decided):** a replaced blessing is never lost. It drops at the player's feet as a small floating relic
    (the blessing's icon in a glowing reliquary). Standing on it shows the interact button ("Swap"); interacting
    swaps it back into its slot, and the blessing it displaces drops as a relic in its place. Relics stay until the

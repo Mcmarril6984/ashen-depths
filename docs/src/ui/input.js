@@ -27,7 +27,13 @@ export function createInput(root) {
     const b = KEYMAP[e.code];
     if (b) held[b] = false;
   });
-  addEventListener('blur', () => { keys.clear(); BTN.forEach((b) => (held[b] = false)); });
+  const releaseAll = () => {
+    keys.clear(); BTN.forEach((b) => (held[b] = false));
+    resetStick();
+    for (const el of root.querySelectorAll('[data-btn].down')) el.classList.remove('down');
+  };
+  addEventListener('blur', releaseAll);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 
   // ---------------- touch ----------------
   const stickEl = root.querySelector('#stick');
@@ -37,8 +43,9 @@ export function createInput(root) {
   const uiScale = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui')) || 1;
   let R = 56;
 
+  // A new touch on the stick zone always takes over: if the old touch's "up" was lost (a menu opened mid-drag,
+  // iOS cancelled the gesture), refusing new touches is what left the stick stuck in one direction.
   zone.addEventListener('pointerdown', (e) => {
-    if (stick.id !== null) return;
     touchUsed = true; document.body.classList.add('touch');
     R = 56 * uiScale();
     stick.id = e.pointerId; stick.ox = e.clientX; stick.oy = e.clientY; stick.x = stick.y = 0;
@@ -60,13 +67,17 @@ export function createInput(root) {
     stick.x = dx / R; stick.y = -dy / R;
     knobEl.style.transform = `translate(${(dx * 56) / R}px, ${(dy * 56) / R}px)`;
   });
-  const endStick = (e) => {
-    if (e.pointerId !== stick.id) return;
+  const resetStick = () => {
     stick.id = null; stick.x = stick.y = 0;
     knobEl.style.transform = ''; stickEl.classList.remove('active');
   };
+  const endStick = (e) => { if (e.pointerId === stick.id) resetStick(); };
   zone.addEventListener('pointerup', endStick);
   zone.addEventListener('pointercancel', endStick);
+  zone.addEventListener('lostpointercapture', endStick);
+  // Backups: the release can land outside the zone once capture is gone.
+  addEventListener('pointerup', endStick, true);
+  addEventListener('pointercancel', endStick, true);
 
   for (const el of root.querySelectorAll('[data-btn]')) {
     const b = el.dataset.btn;
@@ -78,6 +89,7 @@ export function createInput(root) {
       e.preventDefault(); e.stopPropagation();
     };
     const up = (e) => { held[b] = false; el.classList.remove('down'); e.preventDefault(); };
+    el.addEventListener('lostpointercapture', () => { held[b] = false; el.classList.remove('down'); });
     el.addEventListener('pointerdown', down);
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
@@ -127,6 +139,7 @@ export function createInput(root) {
       lastY = s.y;
       return s;
     },
-    clear() { BTN.forEach((b) => { pressed[b] = false; }); },
+    // Called on every screen change (menus, shrines, shops): drop all touches so nothing carries over.
+    clear() { BTN.forEach((b) => { pressed[b] = false; held[b] = false; }); resetStick(); for (const el of root.querySelectorAll('[data-btn].down')) el.classList.remove('down'); },
   };
 }
