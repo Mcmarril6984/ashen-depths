@@ -674,6 +674,36 @@ export class View {
     g.add(this.exitLight);
   }
 
+  // Render a Synty kit prop to a small transparent image (item icons on buttons, cards and the Hearth). Cached.
+  pieceIcon(id, size = 128) {
+    if (!assets.pieces[id]) return null;
+    this.iconCache ||= new Map();
+    if (this.iconCache.has(id)) return this.iconCache.get(id);
+    if (!this.iconScene) {
+      this.iconScene = new THREE.Scene();
+      this.iconScene.add(new THREE.AmbientLight(0xffffff, 1.6));
+      const sun = new THREE.DirectionalLight(0xfff0e0, 2.2); sun.position.set(2, 3, 4); this.iconScene.add(sun);
+      this.iconCam = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+      this.iconTarget = new THREE.WebGLRenderTarget(size, size);
+      this.iconTarget.texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    const g = assets.pieces[id], bb = g.boundingBox, mesh = new THREE.Mesh(g, assets.material);
+    const c = bb.getCenter(new THREE.Vector3()), sz = bb.getSize(new THREE.Vector3()), r = Math.max(sz.x, sz.y, sz.z) * 0.62;
+    mesh.position.sub(c); const pivot = new THREE.Group(); pivot.add(mesh); pivot.rotation.set(0.35, -0.6, 0);
+    this.iconScene.add(pivot);
+    this.iconCam.position.set(0, 0, r / Math.tan(THREE.MathUtils.degToRad(15))); this.iconCam.lookAt(0, 0, 0);
+    const prevTarget = this.renderer.getRenderTarget(), prevClear = this.renderer.getClearAlpha(), prevColor = this.renderer.getClearColor(new THREE.Color());
+    this.renderer.setRenderTarget(this.iconTarget); this.renderer.setClearColor(0x000000, 0); this.renderer.clear();
+    this.renderer.render(this.iconScene, this.iconCam);
+    const px = new Uint8Array(size * size * 4); this.renderer.readRenderTargetPixels(this.iconTarget, 0, 0, size, size, px);
+    this.renderer.setRenderTarget(prevTarget); this.renderer.setClearColor(prevColor, prevClear);
+    this.iconScene.remove(pivot);
+    const cv = document.createElement('canvas'); cv.width = cv.height = size; const ctx = cv.getContext('2d'), img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) img.data.set(px.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4); // flip rows
+    ctx.putImageData(img, 0, 0);
+    const url = cv.toDataURL(); this.iconCache.set(id, url); return url;
+  }
+
   // A camera-facing sprite showing an emoji (blessing icons on relics).
   emojiSprite(ch, size) {
     const c = document.createElement('canvas'); c.width = c.height = 128;
@@ -792,9 +822,11 @@ export class View {
     if (ch.mat.transparent !== cloaked) { ch.mat.transparent = cloaked; ch.mat.needsUpdate = true; }
     ch.mat.opacity = cloaked ? 0.22 + Math.sin(world.time * 12) * 0.05 : 1;
     // Bronze Buckler raised: a bronze disc in front of the hero
-    pv.buckler ||= (() => { const s = this.sprite(0xd8a050, 1.5, 0); this.levelGroup.add(s); return s; })();
-    pv.buckler.position.set(p.x + p.facing * 0.55, p.y + 1.05, 0.6);
-    pv.buckler.material.opacity = p.state === 'block' ? 0.75 : 0;
+    const hasBuckler = (p.stats.items || []).includes('bronze_buckler');
+    if (hasBuckler && !ch.shieldPiece) ch.shieldPiece = attachPiece(ch, 'Hand_L', 'shield', { pos: [0, 0.05, 0], rot: [0, Math.PI / 2, 0], scale: 0.55 });
+    if (ch.shieldPiece) { ch.shieldPiece.visible = hasBuckler; ch.shieldPiece.scale.multiplyScalar(1); }
+    if (ch.shieldPiece && !hasBuckler) { ch.shieldPiece.parent.remove(ch.shieldPiece); ch.shieldPiece = null; }
+    if (p.state === 'block' && Math.random() < 0.3) this.particles.emit(p.x + p.facing * 0.6, p.y + 1.1, 0.3, 1, 0xd8a050, { speed: 0.4, life: 0.25, size: 0.25 });
     if (p.rageT > 0) { ch.mat.emissive.setRGB(0.35, 0.08, 0.02); if (Math.random() < 0.4) this.particles.emit(p.x, p.y + Math.random() * 1.6, 0.4, 1, 0xff6a2a, { speed: 0.5, up: 2, life: 0.4, size: 0.25 }); }
     pv.trail.update(ch.sword, (p.state === 'attack' && p.stateTime < 0.3 / p.stats.attackSpeed) || (p.state === 'heavy' && p.stateTime < 0.35), dt);
     if (p.state === 'dash') for (let i = 0; i < 3; i++) this.particles.emit(p.x - p.facing * 0.3, p.y + 0.2 + Math.random() * 1.5, 0, 1, 0xb8a8ff, { speed: 0.4, life: 0.22, size: 0.45, dir: -p.facing * 0.3 });
@@ -882,6 +914,8 @@ export class View {
           v = this.placePiece('bones', 0, 0, 0, { w: 0.7 });
         } else if (pr.kind === 'bomb') {
           v = this.placePiece('barrel', 0, 0, 0, { h: 0.55 });
+        } else if (pr.kind === 'flask' || pr.kind === 'shard') {
+          v = new THREE.Group(); this.placePiece(pr.kind === 'flask' ? 'lantern' : 'crystals', 0, -0.25, 0, { h: 0.55, group: v });
         } else if (pr.kind === 'blade') {
           v = new THREE.Group(); this.placePiece(pr.piece || 'sword', 0, -0.5, 0, { h: 1.1, group: v });
         } else {
@@ -894,7 +928,7 @@ export class View {
       v.position.set(pr.x, pr.y - (pr.kind === 'bone' ? 0.15 : 0), 0.3);
       if (pr.kind === 'bone' || pr.kind === 'blade') { v.rotation.z += dt * (pr.kind === 'blade' ? 22 : 14); if (pr.kind === 'blade' && Math.random() < 0.6) this.particles.emit(pr.x, pr.y, 0.3, 1, 0xfff0d0, { speed: 0.5, life: 0.25, size: 0.3 }); }
       else if (pr.kind === 'xbolt') { v.material.rotation = Math.atan2(pr.vy, pr.vx); v.scale.set(1.5, 0.28, 1); }
-      else if (pr.kind === 'flask' || pr.kind === 'shard') { if (Math.random() < 0.7) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.kind === 'flask' ? 0xff8a3a : 0xd8f4ff, { speed: 0.4, life: 0.3, size: 0.24 }); }
+      else if (pr.kind === 'flask' || pr.kind === 'shard') { v.rotation.z -= dt * 9 * Math.sign(pr.vx || 1); if (Math.random() < 0.7) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.kind === 'flask' ? 0xff8a3a : 0xd8f4ff, { speed: 0.4, life: 0.3, size: 0.24 }); }
       else if (pr.kind === 'arrow') { // stretched streak aimed along its flight
         v.material.rotation = Math.atan2(pr.vy, pr.vx); v.scale.set(pr.big ? 2.6 : 1.8, pr.big ? 0.5 : 0.32, 1);
         if (Math.random() < (pr.spectral ? 0.9 : 0.5)) this.particles.emit(pr.x, pr.y, 0.1, 1, pr.spectral ? 0x9ae8ff : 0xe8f4ff, { speed: 0.3, life: 0.2, size: 0.22 }); }
@@ -1165,8 +1199,9 @@ export class View {
     const live = new Set([...(world.turrets || []), ...(world.snares || [])]);
     for (const t of live) {
       let v = this.itemViews.get(t);
-      if (!v) { v = this.emojiSprite(world.turrets?.includes(t) ? '🗼' : '🪤', world.turrets?.includes(t) ? 1.1 : 0.7); this.levelGroup.add(v); this.itemViews.set(t, v); }
-      v.position.set(t.x, t.y + (world.turrets?.includes(t) ? 0.55 : 0.3), 0.4);
+      const turret = world.turrets?.includes(t);
+      if (!v) { v = new THREE.Group(); this.placePiece(turret ? 'brazier' : 'spikes', 0, 0, 0, turret ? { h: 1.1, group: v } : { w: 1, h: 0.45, d: 0.6, group: v }); this.levelGroup.add(v); this.itemViews.set(t, v); }
+      v.position.set(t.x, t.y, 0.2);
       if (world.turrets?.includes(t) && Math.random() < 0.3) P.emit(t.x, t.y + 1.1, 0.2, 1, 0xff8a3a, { speed: 0.4, up: 1, life: 0.4, size: 0.2 });
     }
     for (const [t, v] of this.itemViews) if (!live.has(t)) { this.levelGroup.remove(v); this.itemViews.delete(t); }
@@ -1179,8 +1214,12 @@ export class View {
     this.relicViews ||= new Map();
     for (const r of world.relics || []) {
       let v = this.relicViews.get(r);
-      if (!v) { v = this.emojiSprite(r.icon || this.blessingIcon?.(r.id) || '✦', 0.9); this.levelGroup.add(v); this.relicViews.set(r, v); }
-      v.position.set(r.x, r.y + 1 + Math.sin(world.time * 2.5 + r.x) * 0.12, 0.5);
+      if (!v) {
+        v = new THREE.Group(); this.placePiece('gem', 0, -0.35, 0, { h: 0.6, group: v });
+        const ic = this.emojiSprite(r.icon || this.blessingIcon?.(r.id) || '✦', 0.6); ic.position.y = 0.55; v.add(ic);
+        this.levelGroup.add(v); this.relicViews.set(r, v);
+      }
+      v.position.set(r.x, r.y + 0.8 + Math.sin(world.time * 2.5 + r.x) * 0.12, 0.3); v.rotation.y = world.time * 1.2;
       if (Math.random() < 0.3) P.emit(r.x, r.y + 0.9, 0.4, 1, 0xffd27a, { speed: 0.5, up: 1, life: 0.6, size: 0.22 });
     }
     for (const [r, v] of this.relicViews) if (!(world.relics || []).includes(r)) { this.levelGroup.remove(v); this.relicViews.delete(r); }
@@ -1208,7 +1247,9 @@ export class View {
       if (!dv || dv.id !== d.id) {
         if (dv) this.levelGroup.remove(dv.holder);
         const holder = new THREE.Group();
-        if (d.item) { const ic = this.emojiSprite(this.itemIcon?.(d.id) || '✦', 1); ic.position.y = 0.3; holder.add(ic); }
+        const piece = d.item && this.itemPiece?.(d.id);
+        if (piece) this.placePiece(piece, 0, -0.2, 0, { h: 0.9, group: holder });
+        else if (d.item) { const ic = this.emojiSprite(this.itemIcon?.(d.id) || '✦', 1); ic.position.y = 0.3; holder.add(ic); }
         else this.placePiece(this.weaponPiece(d.id), 0, 0, 0, { h: 1.2, group: holder });
         const glow = this.sprite(0xffd27a, 2.4, 0.5); glow.position.y = 0.6; holder.add(glow);
         this.levelGroup.add(holder);

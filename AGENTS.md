@@ -226,3 +226,10 @@ Each entry: what's done, where, and what's next. Whoever stops work updates this
    Hand Crossbow). Cloaked players are invisible to grunts (`cloakView`). Old special/firebolt code is unused.
    Next items from the brainstorm: Bone Bola, Plague Jar, Chain Javelin, Brazier, Bell of Wards, Blood Rite,
    Grave Pull, Spirit Lantern; a "which slot?" choice when both are full.
+9. **Synty props for items and relics (done).** Items have a `piece` (kit prop): lantern, crystals, brazier, spikes,
+   banner_torn, hell_skull, shield; Hand Crossbow has no prop in the kit and keeps its emoji. `View.pieceIcon(id)`
+   renders a prop to a cached PNG data URL for buttons, shop cards and the Hearth. In the world: turrets are
+   braziers, snares are spikes, thrown flasks/shards are the lantern/crystals, item altars float the prop, relics
+   are kit gems carrying the blessing's emoji, the buckler shows the kit shield on the hero's left hand.
+   Blessings still use emoji icons: the repo has no Synty icon pack. If the owner adds one (e.g. a Synty
+   INTERFACE icon set) under docs/assets/ui/icons/, map blessing ids to those images in blessings.js.

@@ -62,14 +62,20 @@ async function boot() {
   view.weaponList = WEAPONS;
   view.blessingIcon = (id) => blessingDef(id)?.icon;
   view.itemIcon = (id) => itemDef(id)?.icon;
+  view.itemPiece = (id) => itemDef(id)?.piece;
+  // Synty prop renders as icons for items (falls back to the emoji when an item has no prop)
+  const itemPic = (id) => { const d = itemDef(id); return d?.piece ? view.pieceIcon(d.piece) : null; };
+  window.__itemIconHtml = (id) => { const pic = itemPic(id); return pic ? `<img class="pic" src="${pic}" alt="">` : null; };
   view.touchUI = matchMedia('(pointer: coarse)').matches;
   addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') view.touchUI = true; });
   input = createInput(document.body);
   hud = new Hud();
   wireUi();
   hearth = new Hearth($('#hearth'), { getMeta: () => meta, setMeta: (m) => { meta = m; writeSave(); updateTitleMeta(); }, onClose: () => setState(lastMenu), onStart: () => newRun(), sfx });
+  hearth.iconHtml = (id) => window.__itemIconHtml?.(id);
   hud.weaponName = (id) => WEAPONS.find((w) => w.id === id)?.name || id;
   hud.itemDef = itemDef;
+  hud.itemPic = (id) => { const d = itemDef(id); return d?.piece ? view.pieceIcon(d.piece) : null; };
   tips = new Tips($('#tip'), () => input.touch || matchMedia('(pointer: coarse)').matches);
   mapView = new MapView($('#minimap'), $('#fullmap'));
   applySettings();
@@ -322,7 +328,7 @@ function renderShop(merchant) {
     const rarity = o.kind === 'item' ? (itemDef(o.id)?.rarity || 'common') : o.kind === 'weapon' ? (WEAPONS.find((x) => x.id === o.id)?.rarity || 'common') : (UPGRADES.find((x) => x.id === o.id)?.rarity || 'common');
     c.className = 'card ' + rarity + (afford ? '' : ' poor');
     const tag = o.kind === 'weapon' ? 'Weapon' : o.kind === 'heal' ? 'Provision' : o.kind === 'item' ? 'Item' : 'Blessing';
-    c.innerHTML = `<div class="icon">${o.icon || '✦'}</div><div class="name">${o.name}</div><div class="desc">${o.desc}</div>` +
+    c.innerHTML = `<div class="icon">${(o.kind === 'item' && window.__itemIconHtml?.(o.id)) || o.icon || '✦'}</div><div class="name">${o.name}</div><div class="desc">${o.desc}</div>` +
       `<div class="rar">${tag}</div><div class="price">${o.sold ? 'Sold' : o.price + ' gold'}</div>`;
     c.addEventListener('click', () => {
       if (o.sold || p.gold < o.price) { sfx('block'); return; }
