@@ -12,7 +12,7 @@ keep=5
 [ -z "$(git status --porcelain)" ] || { echo "Commit or stash your changes first."; exit 1; }
 tmp=$(mktemp -d)
 cp -r docs/. "$tmp"/
-mv "$tmp/src" "$tmp/src-$sha"
+cp -r "$tmp/src" "$tmp/src-$sha"   # src/ stays too, for pages cached before versioned folders existed
 sed -i "s#src=\"src/main.js\"#src=\"src-$sha/main.js\"#" "$tmp/index.html"
 grep -q "src-$sha/main.js" "$tmp/index.html" || { echo "Could not point index.html at src-$sha"; exit 1; }
 git fetch -q origin gh-pages
